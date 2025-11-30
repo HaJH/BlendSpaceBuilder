@@ -12,6 +12,7 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SSegmentedControl.h"
+#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SExpandableArea.h"
@@ -89,6 +90,17 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 				.AutoHeight()
 				[
 					BuildAnalysisResultsSection()
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0, 8)
+				[
+					SNew(SSeparator)
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					BuildGridConfigSection()
 				]
 				+ SVerticalBox::Slot()
 				.AutoHeight()
@@ -245,6 +257,89 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisResultsSection()
 					SNew(STextBlock)
 					.Text(LOCTEXT("UseAnalyzed", "Use analyzed positions"))
 					.ToolTipText(LOCTEXT("UseAnalyzedTip", "If unchecked, role-based default positions will be used instead"))
+				]
+			]
+		];
+}
+
+TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildGridConfigSection()
+{
+	return SNew(SExpandableArea)
+		.AreaTitle(LOCTEXT("GridConfig", "Grid Configuration"))
+		.InitiallyCollapsed(false)
+		.BodyContent()
+		[
+			SNew(SVerticalBox)
+			// Grid Divisions
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.4f)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("GridDivisions", "Grid Divisions:"))
+					.ToolTipText(LOCTEXT("GridDivisionsTip", "Number of grid divisions for both X and Y axes"))
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.6f)
+				[
+					SNew(SSpinBox<int32>)
+					.MinValue(1)
+					.MaxValue(16)
+					.Value_Lambda([this]() { return GridDivisions; })
+					.OnValueChanged(this, &SBlendSpaceConfigDialog::OnGridDivisionsChanged)
+				]
+			]
+			// Snap to Grid
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SCheckBox)
+					.IsChecked_Lambda([this]() { return bSnapToGrid ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+					.OnCheckStateChanged(this, &SBlendSpaceConfigDialog::OnSnapToGridChanged)
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(4, 0, 0, 0)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("SnapToGrid", "Snap to Grid"))
+					.ToolTipText(LOCTEXT("SnapToGridTip", "Snap sample positions to grid when editing in BlendSpace editor"))
+				]
+			]
+			// Use Nice Numbers
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SCheckBox)
+					.IsChecked_Lambda([this]() { return bUseNiceNumbers ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+					.OnCheckStateChanged(this, &SBlendSpaceConfigDialog::OnUseNiceNumbersChanged)
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(4, 0, 0, 0)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("UseNiceNumbers", "Use Nice Numbers"))
+					.ToolTipText(LOCTEXT("UseNiceNumbersTip", "Round axis range to nice values (10, 25, 50, 100...) instead of exact divisions"))
 				]
 			]
 		];
@@ -498,9 +593,11 @@ FReply SBlendSpaceConfigDialog::OnAnalyzeClicked()
 		DetectedLeftFootBone,
 		DetectedRightFootBone);
 
-	// Calculate axis range
+	// Calculate axis range with grid settings
 	FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
 		AnalyzedPositions,
+		GridDivisions,
+		bUseNiceNumbers,
 		AnalyzedXMin, AnalyzedXMax, AnalyzedYMin, AnalyzedYMax);
 
 	// Update axis fields with analyzed range
@@ -521,6 +618,44 @@ void SBlendSpaceConfigDialog::OnAnalysisTypeChanged(EBlendSpaceAnalysisType NewT
 	// Clear previous analysis when type changes
 	bAnalysisPerformed = false;
 	AnalyzedPositions.Empty();
+}
+
+void SBlendSpaceConfigDialog::OnGridDivisionsChanged(int32 NewValue)
+{
+	GridDivisions = FMath::Clamp(NewValue, 1, 16);
+	if (bAnalysisPerformed)
+	{
+		RecalculateAxisRange();
+	}
+}
+
+void SBlendSpaceConfigDialog::OnSnapToGridChanged(ECheckBoxState NewState)
+{
+	bSnapToGrid = (NewState == ECheckBoxState::Checked);
+}
+
+void SBlendSpaceConfigDialog::OnUseNiceNumbersChanged(ECheckBoxState NewState)
+{
+	bUseNiceNumbers = (NewState == ECheckBoxState::Checked);
+	if (bAnalysisPerformed)
+	{
+		RecalculateAxisRange();
+	}
+}
+
+void SBlendSpaceConfigDialog::RecalculateAxisRange()
+{
+	FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
+		AnalyzedPositions,
+		GridDivisions,
+		bUseNiceNumbers,
+		AnalyzedXMin, AnalyzedXMax, AnalyzedYMin, AnalyzedYMax);
+
+	// Update axis fields with recalculated range
+	XAxisMin = AnalyzedXMin;
+	XAxisMax = AnalyzedXMax;
+	YAxisMin = AnalyzedYMin;
+	YAxisMax = AnalyzedYMax;
 }
 
 FReply SBlendSpaceConfigDialog::OnAcceptClicked()
@@ -579,6 +714,10 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 	Config.LeftFootBoneName = DetectedLeftFootBone;
 	Config.RightFootBoneName = DetectedRightFootBone;
 	Config.bOpenInEditor = true;
+
+	// Grid settings
+	Config.GridDivisions = GridDivisions;
+	Config.bSnapToGrid = bSnapToGrid;
 
 	// Set analysis results
 	Config.bApplyAnalysis = bAnalysisPerformed && bUseAnalyzedPositions;
@@ -649,12 +788,20 @@ FText SBlendSpaceConfigDialog::GetAnalysisResultsText() const
 
 FText SBlendSpaceConfigDialog::GetAxisRangeText() const
 {
+	// Calculate step sizes for display
+	float XRange = AnalyzedXMax - AnalyzedXMin;
+	float YRange = AnalyzedYMax - AnalyzedYMin;
+	float XStep = (GridDivisions > 0) ? XRange / GridDivisions : 0.f;
+	float YStep = (GridDivisions > 0) ? YRange / GridDivisions : 0.f;
+
 	return FText::Format(
-		LOCTEXT("AxisRange", "Calculated Axis Range: X({0} ~ {1}), Y({2} ~ {3})"),
+		LOCTEXT("AxisRangeWithStep", "Axis Range: X({0} ~ {1}, step={2}), Y({3} ~ {4}, step={5})"),
 		FText::AsNumber(static_cast<int32>(AnalyzedXMin)),
 		FText::AsNumber(static_cast<int32>(AnalyzedXMax)),
+		FText::AsNumber(static_cast<int32>(XStep)),
 		FText::AsNumber(static_cast<int32>(AnalyzedYMin)),
-		FText::AsNumber(static_cast<int32>(AnalyzedYMax)));
+		FText::AsNumber(static_cast<int32>(AnalyzedYMax)),
+		FText::AsNumber(static_cast<int32>(YStep)));
 }
 
 bool SBlendSpaceConfigDialog::HasSelectedAnimations() const

@@ -23,6 +23,34 @@
 
 namespace BlendSpaceAnalysisInternal
 {
+	// Get a "nice" step size for axis range (rounds to 1, 2, 2.5, 5 * 10^n pattern)
+	float GetNiceStepSize(float RawStep)
+	{
+		if (RawStep <= 0.f)
+		{
+			return 1.f;
+		}
+
+		// Nice factors: 1, 2, 2.5, 5, 10 pattern
+		static const float NiceFactors[] = {1.f, 2.f, 2.5f, 5.f, 10.f};
+
+		// Find the magnitude (power of 10)
+		float Magnitude = FMath::Pow(10.f, FMath::FloorToFloat(FMath::LogX(10.f, RawStep)));
+
+		// Find the smallest nice value >= RawStep
+		for (float Factor : NiceFactors)
+		{
+			float NiceValue = Magnitude * Factor;
+			if (NiceValue >= RawStep - KINDA_SMALL_NUMBER)
+			{
+				return NiceValue;
+			}
+		}
+
+		// Fallback: next magnitude
+		return Magnitude * 10.f;
+	}
+
 	// Calculate component space transform by traversing parent chain
 	FTransform GetComponentSpaceTransform(
 		const UAnimSequence* Animation,
@@ -305,6 +333,8 @@ TMap<UAnimSequence*, FVector> FBlendSpaceFactory::AnalyzeSamplePositions(
 
 void FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
 	const TMap<UAnimSequence*, FVector>& AnalyzedPositions,
+	int32 GridDivisions,
+	bool bUseNiceNumbers,
 	float& OutMinX, float& OutMaxX, float& OutMinY, float& OutMaxY)
 {
 	OutMinX = 0.f;
@@ -325,9 +355,37 @@ void FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
 	float MaxAbsX = FMath::Max(FMath::Abs(OutMinX), FMath::Abs(OutMaxX));
 	float MaxAbsY = FMath::Max(FMath::Abs(OutMinY), FMath::Abs(OutMaxY));
 
-	// Apply padding (10%) and round to nearest 50
-	MaxAbsX = FMath::CeilToFloat(MaxAbsX * 1.1f / 50.f) * 50.f;
-	MaxAbsY = FMath::CeilToFloat(MaxAbsY * 1.1f / 50.f) * 50.f;
+	// Apply 10% padding
+	MaxAbsX *= 1.1f;
+	MaxAbsY *= 1.1f;
+
+	// Grid divisions determines step count from center to edge (half the total range)
+	// For symmetric range: TotalRange = 2 * MaxAbs, divided into GridDivisions steps
+	// So: StepSize = TotalRange / GridDivisions = 2 * MaxAbs / GridDivisions
+	// And: MaxAbs = StepSize * (GridDivisions / 2)
+	float HalfDivisions = GridDivisions / 2.0f;
+
+	// Calculate raw step sizes
+	float RawStepX = MaxAbsX / HalfDivisions;
+	float RawStepY = MaxAbsY / HalfDivisions;
+
+	float FinalStepX, FinalStepY;
+	if (bUseNiceNumbers)
+	{
+		// Round to nice numbers (10, 25, 50, 100...)
+		FinalStepX = BlendSpaceAnalysisInternal::GetNiceStepSize(RawStepX);
+		FinalStepY = BlendSpaceAnalysisInternal::GetNiceStepSize(RawStepY);
+	}
+	else
+	{
+		// Round up to nearest integer for exact divisions
+		FinalStepX = FMath::CeilToFloat(RawStepX);
+		FinalStepY = FMath::CeilToFloat(RawStepY);
+	}
+
+	// Calculate final range from step size
+	MaxAbsX = FinalStepX * HalfDivisions;
+	MaxAbsY = FinalStepY * HalfDivisions;
 
 	// Ensure minimum range
 	MaxAbsX = FMath::Max(MaxAbsX, 100.f);
@@ -388,13 +446,15 @@ void FBlendSpaceFactory::ConfigureAxes(UBlendSpace* BlendSpace, const FBlendSpac
 	BlendParameters[0].DisplayName = Config.XAxisName;
 	BlendParameters[0].Min = Config.XAxisMin;
 	BlendParameters[0].Max = Config.XAxisMax;
-	BlendParameters[0].GridNum = 4;
+	BlendParameters[0].GridNum = Config.GridDivisions;
+	BlendParameters[0].bSnapToGrid = Config.bSnapToGrid;
 
 	// Y Axis (Vertical - Forward Velocity)
 	BlendParameters[1].DisplayName = Config.YAxisName;
 	BlendParameters[1].Min = Config.YAxisMin;
 	BlendParameters[1].Max = Config.YAxisMax;
-	BlendParameters[1].GridNum = 4;
+	BlendParameters[1].GridNum = Config.GridDivisions;
+	BlendParameters[1].bSnapToGrid = Config.bSnapToGrid;
 }
 
 void FBlendSpaceFactory::AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Animation, const FVector& Position)
@@ -404,6 +464,7 @@ void FBlendSpaceFactory::AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSeq
 		return;
 	}
 
+	BlendSpace->Modify();
 	BlendSpace->AddSample(Animation, Position);
 }
 
@@ -414,6 +475,11 @@ void FBlendSpaceFactory::FinalizeAndSave(UBlendSpace* BlendSpace)
 		return;
 	}
 
+	// Validate and update internal data
+	BlendSpace->ValidateSampleData();
+
+	// Notify editor of changes
+	BlendSpace->Modify();
 	BlendSpace->PostEditChange();
 	BlendSpace->MarkPackageDirty();
 

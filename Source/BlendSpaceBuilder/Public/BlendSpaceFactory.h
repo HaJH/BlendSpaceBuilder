@@ -50,6 +50,12 @@ struct FBlendSpaceBuildConfig
 
 	/** Pre-analyzed sample positions (calculated by UI Analyze button) */
 	TMap<UAnimSequence*, FVector> PreAnalyzedPositions;
+
+	/** Grid divisions (applied to both X and Y axes) */
+	int32 GridDivisions = 4;
+
+	/** Snap samples to grid */
+	bool bSnapToGrid = true;
 };
 
 class BLENDSPACEBUILDER_API FBlendSpaceFactory
@@ -70,9 +76,13 @@ public:
 
 	/**
 	 * Calculate symmetric axis range from analyzed positions with padding.
+	 * @param GridDivisions Number of grid divisions (affects step size calculation)
+	 * @param bUseNiceNumbers If true, rounds to nice numbers (10, 25, 50...); if false, uses exact step
 	 */
 	static void CalculateAxisRangeFromAnalysis(
 		const TMap<UAnimSequence*, FVector>& AnalyzedPositions,
+		int32 GridDivisions,
+		bool bUseNiceNumbers,
 		float& OutMinX, float& OutMaxX, float& OutMinY, float& OutMaxY);
 
 private:

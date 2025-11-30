@@ -74,10 +74,15 @@ private:
 	// UI builders
 	TSharedRef<SWidget> BuildAnalysisSection();
 	TSharedRef<SWidget> BuildAnalysisResultsSection();
+	TSharedRef<SWidget> BuildGridConfigSection();
 
 	// Event handlers
 	FReply OnAnalyzeClicked();
 	void OnAnalysisTypeChanged(EBlendSpaceAnalysisType NewType);
+	void OnGridDivisionsChanged(int32 NewValue);
+	void OnSnapToGridChanged(ECheckBoxState NewState);
+	void OnUseNiceNumbersChanged(ECheckBoxState NewState);
+	void RecalculateAxisRange();
 
 	// UI helpers
 	EVisibility GetFootBoneVisibility() const;
@@ -86,4 +91,9 @@ private:
 	FText GetAnalysisResultsText() const;
 	FText GetAxisRangeText() const;
 	bool HasSelectedAnimations() const;
+
+	// Grid configuration
+	int32 GridDivisions = 4;
+	bool bSnapToGrid = true;
+	bool bUseNiceNumbers = true;
 };
