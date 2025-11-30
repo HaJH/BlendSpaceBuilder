@@ -88,8 +88,7 @@ void FLocomotionAnimClassifier::QueryAnimationsFromAssetRegistry(const USkeleton
 		FAssetTagValueRef SkeletonTag = AssetData.TagsAndValues.FindTag(TEXT("Skeleton"));
 		if (SkeletonTag.IsSet())
 		{
-			FString AnimSkeletonPath;
-			SkeletonTag.AsString(AnimSkeletonPath);
+			FString AnimSkeletonPath = SkeletonTag.AsString();
 
 			if (AnimSkeletonPath == SkeletonPathString || AnimSkeletonPath.Contains(Skeleton->GetName()))
 			{

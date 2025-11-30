@@ -81,18 +81,20 @@ void FBlendSpaceFactory::ConfigureAxes(UBlendSpace* BlendSpace, const FBlendSpac
 	}
 
 	// X Axis (Horizontal - Right Velocity)
-	FBlendParameter& XAxis = BlendSpace->GetBlendParameter(0);
+	FBlendParameter XAxis = BlendSpace->GetBlendParameter(0);
 	XAxis.DisplayName = Config.XAxisName;
 	XAxis.Min = Config.XAxisMin;
 	XAxis.Max = Config.XAxisMax;
 	XAxis.GridNum = 4;
+	BlendSpace->UpdateParameter(0, XAxis);
 
 	// Y Axis (Vertical - Forward Velocity)
-	FBlendParameter& YAxis = BlendSpace->GetBlendParameter(1);
+	FBlendParameter YAxis = BlendSpace->GetBlendParameter(1);
 	YAxis.DisplayName = Config.YAxisName;
 	YAxis.Min = Config.YAxisMin;
 	YAxis.Max = Config.YAxisMax;
 	YAxis.GridNum = 4;
+	BlendSpace->UpdateParameter(1, YAxis);
 }
 
 void FBlendSpaceFactory::AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Animation, const FVector& Position)
