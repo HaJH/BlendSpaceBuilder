@@ -10,6 +10,7 @@
 #include "UObject/SavePackage.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
+#include "UObject/UnrealType.h"
 
 #define LOCTEXT_NAMESPACE "BlendSpaceFactory"
 
@@ -80,21 +81,30 @@ void FBlendSpaceFactory::ConfigureAxes(UBlendSpace* BlendSpace, const FBlendSpac
 		return;
 	}
 
+	// Access BlendParameters via reflection (it's protected)
+	FProperty* BlendParametersProperty = UBlendSpace::StaticClass()->FindPropertyByName(TEXT("BlendParameters"));
+	if (!BlendParametersProperty)
+	{
+		return;
+	}
+
+	FBlendParameter* BlendParameters = BlendParametersProperty->ContainerPtrToValuePtr<FBlendParameter>(BlendSpace);
+	if (!BlendParameters)
+	{
+		return;
+	}
+
 	// X Axis (Horizontal - Right Velocity)
-	FBlendParameter XAxis = BlendSpace->GetBlendParameter(0);
-	XAxis.DisplayName = Config.XAxisName;
-	XAxis.Min = Config.XAxisMin;
-	XAxis.Max = Config.XAxisMax;
-	XAxis.GridNum = 4;
-	BlendSpace->UpdateParameter(0, XAxis);
+	BlendParameters[0].DisplayName = Config.XAxisName;
+	BlendParameters[0].Min = Config.XAxisMin;
+	BlendParameters[0].Max = Config.XAxisMax;
+	BlendParameters[0].GridNum = 4;
 
 	// Y Axis (Vertical - Forward Velocity)
-	FBlendParameter YAxis = BlendSpace->GetBlendParameter(1);
-	YAxis.DisplayName = Config.YAxisName;
-	YAxis.Min = Config.YAxisMin;
-	YAxis.Max = Config.YAxisMax;
-	YAxis.GridNum = 4;
-	BlendSpace->UpdateParameter(1, YAxis);
+	BlendParameters[1].DisplayName = Config.YAxisName;
+	BlendParameters[1].Min = Config.YAxisMin;
+	BlendParameters[1].Max = Config.YAxisMax;
+	BlendParameters[1].GridNum = 4;
 }
 
 void FBlendSpaceFactory::AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Animation, const FVector& Position)
