@@ -11,9 +11,11 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SSegmentedControl.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SExpandableArea.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 
 #define LOCTEXT_NAMESPACE "SBlendSpaceConfigDialog"
 
@@ -49,6 +51,13 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 		}
 	}
 
+	// Detect foot bones for Locomotion analysis
+	if (Skeleton)
+	{
+		DetectedLeftFootBone = Settings->FindLeftFootBone(Skeleton);
+		DetectedRightFootBone = Settings->FindRightFootBone(Skeleton);
+	}
+
 	ChildSlot
 	[
 		SNew(SVerticalBox)
@@ -63,7 +72,7 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				[
-					BuildAxisConfigSection()
+					BuildAnimationSelectionSection()
 				]
 				+ SVerticalBox::Slot()
 				.AutoHeight()
@@ -74,7 +83,23 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				[
-					BuildAnimationSelectionSection()
+					BuildAnalysisSection()
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					BuildAnalysisResultsSection()
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0, 8)
+				[
+					SNew(SSeparator)
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					BuildAxisConfigSection()
 				]
 				+ SVerticalBox::Slot()
 				.AutoHeight()
@@ -96,6 +121,133 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 			BuildButtonSection()
 		]
 	];
+}
+
+TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisSection()
+{
+	return SNew(SExpandableArea)
+		.AreaTitle(LOCTEXT("Analysis", "Analysis"))
+		.InitiallyCollapsed(false)
+		.BodyContent()
+		[
+			SNew(SVerticalBox)
+			// Analysis Type Selection
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.3f)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("AnalysisType", "Analysis Type:"))
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.7f)
+				[
+					SNew(SSegmentedControl<EBlendSpaceAnalysisType>)
+					.Value_Lambda([this]() { return SelectedAnalysisType; })
+					.OnValueChanged(this, &SBlendSpaceConfigDialog::OnAnalysisTypeChanged)
+					+ SSegmentedControl<EBlendSpaceAnalysisType>::Slot(EBlendSpaceAnalysisType::RootMotion)
+					.Text(LOCTEXT("RootMotion", "Root Motion"))
+					.ToolTip(LOCTEXT("RootMotionTip", "Calculate position from root motion velocity"))
+					+ SSegmentedControl<EBlendSpaceAnalysisType>::Slot(EBlendSpaceAnalysisType::Locomotion)
+					.Text(LOCTEXT("Locomotion", "Locomotion"))
+					.ToolTip(LOCTEXT("LocomotionTip", "Calculate position from foot movement (for in-place animations)"))
+				]
+			]
+			// Foot Bone Info (only shown when Locomotion is selected)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(STextBlock)
+				.Visibility(this, &SBlendSpaceConfigDialog::GetFootBoneVisibility)
+				.Text(this, &SBlendSpaceConfigDialog::GetFootBoneText)
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f)))
+			]
+			// Analyze Button
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4, 8)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.0f)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SButton)
+					.Text(LOCTEXT("Analyze", "Analyze Samples"))
+					.OnClicked(this, &SBlendSpaceConfigDialog::OnAnalyzeClicked)
+					.IsEnabled_Lambda([this]() { return HasSelectedAnimations(); })
+					.ToolTipText(LOCTEXT("AnalyzeTip", "Calculate sample positions based on selected analysis type"))
+				]
+			]
+		];
+}
+
+TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisResultsSection()
+{
+	return SNew(SBorder)
+		.Visibility(this, &SBlendSpaceConfigDialog::GetAnalysisResultsVisibility)
+		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+		.Padding(8)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 0, 0, 4)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("AnalysisResults", "Analysis Results:"))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+			]
+			// Results list
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(STextBlock)
+				.Text(this, &SBlendSpaceConfigDialog::GetAnalysisResultsText)
+				.AutoWrapText(true)
+			]
+			// Calculated axis range
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(STextBlock)
+				.Text(this, &SBlendSpaceConfigDialog::GetAxisRangeText)
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.8f, 0.6f)))
+			]
+			// Use analyzed positions checkbox
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4, 8, 4, 0)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SCheckBox)
+					.IsChecked_Lambda([this]() { return bUseAnalyzedPositions ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+					.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState) { bUseAnalyzedPositions = (NewState == ECheckBoxState::Checked); })
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(4, 0, 0, 0)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("UseAnalyzed", "Use analyzed positions"))
+					.ToolTipText(LOCTEXT("UseAnalyzedTip", "If unchecked, role-based default positions will be used instead"))
+				]
+			]
+		];
 }
 
 TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAxisConfigSection()
@@ -160,29 +312,6 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAxisConfigSection()
 					SNew(SNumericEntryBox<float>)
 					.Value_Lambda([this]() { return YAxisMax; })
 					.OnValueCommitted_Lambda([this](float Value, ETextCommit::Type) { YAxisMax = Value; })
-				]
-			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(4, 8, 4, 4)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				[
-					SNew(SCheckBox)
-					.IsChecked_Lambda([this]() { return bApplyAnalysis ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-					.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState) { bApplyAnalysis = (NewState == ECheckBoxState::Checked); })
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				.Padding(4, 0, 0, 0)
-				[
-					SNew(STextBlock)
-					.Text(LOCTEXT("ApplyAnalysis", "Apply Animation Analysis"))
-					.ToolTipText(LOCTEXT("ApplyAnalysisTooltip", "Automatically analyze root motion velocity and adjust sample positions after creation"))
 				]
 			]
 		];
@@ -360,6 +489,40 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildButtonSection()
 		];
 }
 
+FReply SBlendSpaceConfigDialog::OnAnalyzeClicked()
+{
+	// Run analysis
+	AnalyzedPositions = FBlendSpaceFactory::AnalyzeSamplePositions(
+		SelectedAnimations,
+		SelectedAnalysisType,
+		DetectedLeftFootBone,
+		DetectedRightFootBone);
+
+	// Calculate axis range
+	FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
+		AnalyzedPositions,
+		AnalyzedXMin, AnalyzedXMax, AnalyzedYMin, AnalyzedYMax);
+
+	// Update axis fields with analyzed range
+	XAxisMin = AnalyzedXMin;
+	XAxisMax = AnalyzedXMax;
+	YAxisMin = AnalyzedYMin;
+	YAxisMax = AnalyzedYMax;
+
+	bAnalysisPerformed = true;
+	bUseAnalyzedPositions = true;
+
+	return FReply::Handled();
+}
+
+void SBlendSpaceConfigDialog::OnAnalysisTypeChanged(EBlendSpaceAnalysisType NewType)
+{
+	SelectedAnalysisType = NewType;
+	// Clear previous analysis when type changes
+	bAnalysisPerformed = false;
+	AnalyzedPositions.Empty();
+}
+
 FReply SBlendSpaceConfigDialog::OnAcceptClicked()
 {
 	bWasAccepted = true;
@@ -390,6 +553,13 @@ void SBlendSpaceConfigDialog::OnAnimationSelected(ELocomotionRole Role, UAnimSeq
 	{
 		SelectedAnimations.Remove(Role);
 	}
+
+	// Clear analysis when animations change
+	if (bAnalysisPerformed)
+	{
+		bAnalysisPerformed = false;
+		AnalyzedPositions.Empty();
+	}
 }
 
 FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
@@ -405,8 +575,91 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 	Config.PackagePath = BasePath;
 	Config.AssetName = OutputAssetName;
 	Config.SelectedAnimations = SelectedAnimations;
-	Config.bApplyAnalysis = bApplyAnalysis;
+	Config.AnalysisType = SelectedAnalysisType;
+	Config.LeftFootBoneName = DetectedLeftFootBone;
+	Config.RightFootBoneName = DetectedRightFootBone;
+	Config.bOpenInEditor = true;
+
+	// Set analysis results
+	Config.bApplyAnalysis = bAnalysisPerformed && bUseAnalyzedPositions;
+	if (Config.bApplyAnalysis)
+	{
+		Config.PreAnalyzedPositions = AnalyzedPositions;
+	}
+
 	return Config;
+}
+
+EVisibility SBlendSpaceConfigDialog::GetFootBoneVisibility() const
+{
+	return (SelectedAnalysisType == EBlendSpaceAnalysisType::Locomotion)
+		? EVisibility::Visible
+		: EVisibility::Collapsed;
+}
+
+EVisibility SBlendSpaceConfigDialog::GetAnalysisResultsVisibility() const
+{
+	return bAnalysisPerformed ? EVisibility::Visible : EVisibility::Collapsed;
+}
+
+FText SBlendSpaceConfigDialog::GetFootBoneText() const
+{
+	FString LeftBoneStr = DetectedLeftFootBone.IsNone() ? TEXT("Not Found") : DetectedLeftFootBone.ToString();
+	FString RightBoneStr = DetectedRightFootBone.IsNone() ? TEXT("Not Found") : DetectedRightFootBone.ToString();
+
+	return FText::Format(
+		LOCTEXT("FootBones", "Detected Foot Bones: L={0}, R={1}"),
+		FText::FromString(LeftBoneStr),
+		FText::FromString(RightBoneStr));
+}
+
+FText SBlendSpaceConfigDialog::GetAnalysisResultsText() const
+{
+	if (!bAnalysisPerformed || AnalyzedPositions.Num() == 0)
+	{
+		return FText::GetEmpty();
+	}
+
+	FString ResultStr;
+	for (const auto& Pair : SelectedAnimations)
+	{
+		UAnimSequence* Anim = Pair.Value;
+		if (!Anim)
+		{
+			continue;
+		}
+
+		const FVector* PosPtr = AnalyzedPositions.Find(Anim);
+		if (PosPtr)
+		{
+			FString AnimName = Anim->GetName();
+			// Truncate long names
+			if (AnimName.Len() > 20)
+			{
+				AnimName = AnimName.Left(17) + TEXT("...");
+			}
+
+			ResultStr += FString::Printf(TEXT("%s: (%.0f, %.0f)\n"),
+				*AnimName, PosPtr->X, PosPtr->Y);
+		}
+	}
+
+	return FText::FromString(ResultStr.TrimEnd());
+}
+
+FText SBlendSpaceConfigDialog::GetAxisRangeText() const
+{
+	return FText::Format(
+		LOCTEXT("AxisRange", "Calculated Axis Range: X({0} ~ {1}), Y({2} ~ {3})"),
+		FText::AsNumber(static_cast<int32>(AnalyzedXMin)),
+		FText::AsNumber(static_cast<int32>(AnalyzedXMax)),
+		FText::AsNumber(static_cast<int32>(AnalyzedYMin)),
+		FText::AsNumber(static_cast<int32>(AnalyzedYMax)));
+}
+
+bool SBlendSpaceConfigDialog::HasSelectedAnimations() const
+{
+	return SelectedAnimations.Num() > 0;
 }
 
 #undef LOCTEXT_NAMESPACE

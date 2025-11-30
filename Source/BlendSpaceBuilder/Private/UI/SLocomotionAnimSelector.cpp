@@ -2,6 +2,7 @@
 #include "LocomotionAnimClassifier.h"
 #include "Animation/AnimSequence.h"
 #include "Widgets/Input/SComboBox.h"
+#include "Widgets/SBoxPanel.h"
 
 #define LOCTEXT_NAMESPACE "SLocomotionAnimSelector"
 
@@ -40,26 +41,31 @@ void SLocomotionAnimSelector::Construct(const FArguments& InArgs)
 
 TSharedRef<SWidget> SLocomotionAnimSelector::GenerateComboBoxItem(TSharedPtr<FClassifiedAnimation> Item)
 {
-	FString DisplayText;
-	FSlateColor TextColor = FSlateColor::UseForeground();
-
 	if (!Item.IsValid() || !Item->Animation.IsValid())
 	{
-		DisplayText = TEXT("(None)");
-		TextColor = FSlateColor::UseSubduedForeground();
-	}
-	else
-	{
-		DisplayText = Item->GetDisplayName();
-		if (Item->bHasRootMotion)
-		{
-			TextColor = FLinearColor::Green;
-		}
+		return SNew(STextBlock)
+			.Text(LOCTEXT("None", "(None)"))
+			.ColorAndOpacity(FSlateColor::UseSubduedForeground());
 	}
 
-	return SNew(STextBlock)
-		.Text(FText::FromString(DisplayText))
-		.ColorAndOpacity(TextColor);
+	// Build row with [RM] indicator for root motion animations
+	return SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(0, 0, 4, 0)
+		[
+			SNew(STextBlock)
+			.Text(Item->bHasRootMotion ? LOCTEXT("RM", "[RM]") : FText::GetEmpty())
+			.ColorAndOpacity(FLinearColor::Green)
+			.ToolTipText(LOCTEXT("RootMotionEnabled", "Root Motion Enabled"))
+			.Visibility(Item->bHasRootMotion ? EVisibility::Visible : EVisibility::Hidden)
+		]
+		+ SHorizontalBox::Slot()
+		.FillWidth(1.0f)
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString(Item->GetDisplayName()))
+		];
 }
 
 void SLocomotionAnimSelector::OnSelectionChanged(TSharedPtr<FClassifiedAnimation> Item, ESelectInfo::Type SelectInfo)
@@ -80,6 +86,13 @@ FText SLocomotionAnimSelector::GetCurrentSelectionText() const
 	if (!CurrentSelection.IsValid() || !CurrentSelection->Animation.IsValid())
 	{
 		return LOCTEXT("NoneSelected", "(None)");
+	}
+
+	// Include [RM] indicator in selected text
+	if (CurrentSelection->bHasRootMotion)
+	{
+		return FText::Format(LOCTEXT("SelectedWithRM", "[RM] {0}"),
+			FText::FromString(CurrentSelection->GetDisplayName()));
 	}
 
 	return FText::FromString(CurrentSelection->GetDisplayName());

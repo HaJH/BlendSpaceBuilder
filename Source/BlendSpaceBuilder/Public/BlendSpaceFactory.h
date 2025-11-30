@@ -7,6 +7,15 @@ class UBlendSpace;
 class UAnimSequence;
 class USkeleton;
 
+/** Analysis type for BlendSpace axis calculation */
+enum class EBlendSpaceAnalysisType : uint8
+{
+	/** Root Motion based velocity analysis */
+	RootMotion,
+	/** Foot movement based locomotion analysis */
+	Locomotion,
+};
+
 struct FBlendSpaceBuildConfig
 {
 	USkeleton* Skeleton = nullptr;
@@ -24,14 +33,47 @@ struct FBlendSpaceBuildConfig
 
 	TMap<ELocomotionRole, UAnimSequence*> SelectedAnimations;
 
-	/** Whether to apply UE5 BlendSpace Analysis after creation */
+	/** Whether to use pre-analyzed positions (from UI Analyze button) */
 	bool bApplyAnalysis = true;
+
+	/** Analysis type to use (RootMotion or Locomotion) */
+	EBlendSpaceAnalysisType AnalysisType = EBlendSpaceAnalysisType::RootMotion;
+
+	/** Left foot bone name for Locomotion analysis */
+	FName LeftFootBoneName = NAME_None;
+
+	/** Right foot bone name for Locomotion analysis */
+	FName RightFootBoneName = NAME_None;
+
+	/** Whether to open the asset in editor after creation */
+	bool bOpenInEditor = true;
+
+	/** Pre-analyzed sample positions (calculated by UI Analyze button) */
+	TMap<UAnimSequence*, FVector> PreAnalyzedPositions;
 };
 
 class BLENDSPACEBUILDER_API FBlendSpaceFactory
 {
 public:
 	static UBlendSpace* CreateLocomotionBlendSpace(const FBlendSpaceBuildConfig& Config);
+
+	/**
+	 * Analyze animations and calculate sample positions.
+	 * Call this from UI before Create to preview/validate analysis results.
+	 * @return Map of Animation -> calculated position (X=Right, Y=Forward, Z=0)
+	 */
+	static TMap<UAnimSequence*, FVector> AnalyzeSamplePositions(
+		const TMap<ELocomotionRole, UAnimSequence*>& Animations,
+		EBlendSpaceAnalysisType AnalysisType,
+		FName LeftFootBone = NAME_None,
+		FName RightFootBone = NAME_None);
+
+	/**
+	 * Calculate symmetric axis range from analyzed positions with padding.
+	 */
+	static void CalculateAxisRangeFromAnalysis(
+		const TMap<UAnimSequence*, FVector>& AnalyzedPositions,
+		float& OutMinX, float& OutMaxX, float& OutMinY, float& OutMaxY);
 
 private:
 	static UBlendSpace* CreateBlendSpaceAsset(const FString& PackagePath, const FString& AssetName, USkeleton* Skeleton);
@@ -40,12 +82,6 @@ private:
 	static void FinalizeAndSave(UBlendSpace* BlendSpace);
 	static FVector2D GetPositionForRole(ELocomotionRole Role, const FBlendSpaceBuildConfig& Config);
 
-	/** Calculate root motion velocity from animation (X=Right, Y=Forward) */
-	static FVector2D CalculateRootMotionVelocity(const UAnimSequence* Animation);
-
-	/** Apply root motion analysis to the created blend space */
-	static void ApplyAnalysisToBlendSpace(UBlendSpace* BlendSpace);
-
-	/** Auto-adjust axis range based on analyzed sample positions */
-	static void AutoAdjustAxisRange(UBlendSpace* BlendSpace);
+	/** Open the BlendSpace asset in editor */
+	static void OpenAssetInEditor(UBlendSpace* BlendSpace);
 };

@@ -51,6 +51,39 @@ private:
 	FString OutputAssetName;
 
 	TMap<ELocomotionRole, UAnimSequence*> SelectedAnimations;
-	bool bApplyAnalysis = true;
 	bool bWasAccepted = false;
+
+	// Analysis type selection
+	EBlendSpaceAnalysisType SelectedAnalysisType = EBlendSpaceAnalysisType::RootMotion;
+
+	// Detected foot bones for Locomotion analysis
+	FName DetectedLeftFootBone = NAME_None;
+	FName DetectedRightFootBone = NAME_None;
+
+	// Analysis results (populated by Analyze button)
+	TMap<UAnimSequence*, FVector> AnalyzedPositions;
+	bool bAnalysisPerformed = false;
+	bool bUseAnalyzedPositions = true;
+
+	// Calculated axis range from analysis
+	float AnalyzedXMin = -500.f;
+	float AnalyzedXMax = 500.f;
+	float AnalyzedYMin = -500.f;
+	float AnalyzedYMax = 500.f;
+
+	// UI builders
+	TSharedRef<SWidget> BuildAnalysisSection();
+	TSharedRef<SWidget> BuildAnalysisResultsSection();
+
+	// Event handlers
+	FReply OnAnalyzeClicked();
+	void OnAnalysisTypeChanged(EBlendSpaceAnalysisType NewType);
+
+	// UI helpers
+	EVisibility GetFootBoneVisibility() const;
+	EVisibility GetAnalysisResultsVisibility() const;
+	FText GetFootBoneText() const;
+	FText GetAnalysisResultsText() const;
+	FText GetAxisRangeText() const;
+	bool HasSelectedAnimations() const;
 };

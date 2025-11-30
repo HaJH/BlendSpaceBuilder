@@ -1,5 +1,6 @@
 #include "BlendSpaceBuilderSettings.h"
 #include "Internationalization/Regex.h"
+#include "Animation/Skeleton.h"
 
 UBlendSpaceBuilderSettings::UBlendSpaceBuilderSettings()
 {
@@ -231,4 +232,54 @@ void UBlendSpaceBuilderSettings::ResetToDefaultFootPatterns()
 {
 	InitializeDefaultFootPatterns();
 	SaveConfig();
+}
+
+FName UBlendSpaceBuilderSettings::FindLeftFootBone(const USkeleton* Skeleton) const
+{
+	if (!Skeleton)
+	{
+		return NAME_None;
+	}
+
+	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
+
+	for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+	{
+		FString BoneName = RefSkeleton.GetBoneName(BoneIndex).ToString();
+
+		for (const FString& Pattern : LeftFootBonePatterns)
+		{
+			if (BoneName.Contains(Pattern, ESearchCase::IgnoreCase))
+			{
+				return RefSkeleton.GetBoneName(BoneIndex);
+			}
+		}
+	}
+
+	return NAME_None;
+}
+
+FName UBlendSpaceBuilderSettings::FindRightFootBone(const USkeleton* Skeleton) const
+{
+	if (!Skeleton)
+	{
+		return NAME_None;
+	}
+
+	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
+
+	for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+	{
+		FString BoneName = RefSkeleton.GetBoneName(BoneIndex).ToString();
+
+		for (const FString& Pattern : RightFootBonePatterns)
+		{
+			if (BoneName.Contains(Pattern, ESearchCase::IgnoreCase))
+			{
+				return RefSkeleton.GetBoneName(BoneIndex);
+			}
+		}
+	}
+
+	return NAME_None;
 }

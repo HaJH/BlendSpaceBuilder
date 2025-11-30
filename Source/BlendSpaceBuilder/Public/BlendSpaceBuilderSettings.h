@@ -127,6 +127,12 @@ public:
 	FVector2D GetPositionForRole(ELocomotionRole Role) const;
 	float GetSpeedForTier(const FString& TierName) const;
 
+	/** Find left foot bone from skeleton using LeftFootBonePatterns */
+	FName FindLeftFootBone(const class USkeleton* Skeleton) const;
+
+	/** Find right foot bone from skeleton using RightFootBonePatterns */
+	FName FindRightFootBone(const class USkeleton* Skeleton) const;
+
 	static FString GetRoleDisplayName(ELocomotionRole Role);
 
 private:

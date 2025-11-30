@@ -28,6 +28,8 @@ public class BlendSpaceBuilder : ModuleRules
 				"AssetRegistry",
 				"DeveloperSettings",
 				"Projects",
+				"EditorSubsystem",
+				"Persona",
 			}
 		);
 	}
