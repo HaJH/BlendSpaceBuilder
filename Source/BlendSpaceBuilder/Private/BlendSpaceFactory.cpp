@@ -29,6 +29,7 @@ UBlendSpace* FBlendSpaceFactory::CreateLocomotionBlendSpace(const FBlendSpaceBui
 
 	ConfigureAxes(BlendSpace, Config);
 
+	// Add samples with role-based default positions
 	for (const auto& Pair : Config.SelectedAnimations)
 	{
 		ELocomotionRole Role = Pair.Key;
@@ -42,6 +43,13 @@ UBlendSpace* FBlendSpaceFactory::CreateLocomotionBlendSpace(const FBlendSpaceBui
 		FVector2D Position = GetPositionForRole(Role, Config);
 		FVector Position3D(Position.X, Position.Y, 0.f);
 		AddSampleToBlendSpace(BlendSpace, Anim, Position3D);
+	}
+
+	// Apply UE5 BlendSpace Analysis if requested
+	if (Config.bApplyAnalysis)
+	{
+		ApplyAnalysisToBlendSpace(BlendSpace);
+		AutoAdjustAxisRange(BlendSpace);
 	}
 
 	FinalizeAndSave(BlendSpace);
@@ -203,6 +211,129 @@ FVector2D FBlendSpaceFactory::GetPositionForRole(ELocomotionRole Role, const FBl
 	default:
 		return FVector2D::ZeroVector;
 	}
+}
+
+FVector2D FBlendSpaceFactory::CalculateRootMotionVelocity(const UAnimSequence* Animation)
+{
+	if (!Animation || !Animation->bEnableRootMotion)
+	{
+		return FVector2D::ZeroVector;
+	}
+
+	double PlayLength = Animation->GetPlayLength();
+	if (PlayLength <= KINDA_SMALL_NUMBER)
+	{
+		return FVector2D::ZeroVector;
+	}
+
+	// Extract root motion from start to end of animation
+	FAnimExtractContext ExtractionContext(0.0, true);
+	FTransform RootMotion = Animation->ExtractRootMotionFromRange(0.0, PlayLength, ExtractionContext);
+
+	// Calculate velocity (distance / time)
+	FVector Translation = RootMotion.GetTranslation();
+	FVector Velocity = Translation / PlayLength;
+
+	// Apply rate scale
+	Velocity *= Animation->RateScale;
+
+	// Return X (Right) and Y (Forward) velocities
+	return FVector2D(Velocity.X, Velocity.Y);
+}
+
+void FBlendSpaceFactory::ApplyAnalysisToBlendSpace(UBlendSpace* BlendSpace)
+{
+	if (!BlendSpace)
+	{
+		return;
+	}
+
+	// Apply analysis to all samples
+	// Priority: RootMotion animations get analyzed, non-RootMotion keep original position
+	for (int32 SampleIndex = 0; SampleIndex < BlendSpace->GetNumberOfBlendSamples(); ++SampleIndex)
+	{
+		const FBlendSample& Sample = BlendSpace->GetBlendSample(SampleIndex);
+		if (!Sample.Animation)
+		{
+			continue;
+		}
+
+		// Check if animation has RootMotion enabled
+		bool bHasRootMotion = Sample.Animation->bEnableRootMotion;
+
+		if (bHasRootMotion)
+		{
+			// RootMotion animation: Calculate velocity from root motion
+			FVector2D Velocity = CalculateRootMotionVelocity(Sample.Animation);
+
+			if (!Velocity.IsNearlyZero())
+			{
+				FVector NewPosition(Velocity.X, Velocity.Y, 0.f);
+				BlendSpace->EditSampleValue(SampleIndex, NewPosition);
+			}
+		}
+		// Non-RootMotion animation: Keep original role-based position (fallback)
+		// No action needed - position already set from GetPositionForRole()
+	}
+}
+
+void FBlendSpaceFactory::AutoAdjustAxisRange(UBlendSpace* BlendSpace)
+{
+	if (!BlendSpace || BlendSpace->GetNumberOfBlendSamples() == 0)
+	{
+		return;
+	}
+
+	// Find min/max from analyzed sample positions
+	float MinX = TNumericLimits<float>::Max();
+	float MaxX = TNumericLimits<float>::Lowest();
+	float MinY = TNumericLimits<float>::Max();
+	float MaxY = TNumericLimits<float>::Lowest();
+
+	for (int32 SampleIndex = 0; SampleIndex < BlendSpace->GetNumberOfBlendSamples(); ++SampleIndex)
+	{
+		const FBlendSample& Sample = BlendSpace->GetBlendSample(SampleIndex);
+		MinX = FMath::Min(MinX, Sample.SampleValue.X);
+		MaxX = FMath::Max(MaxX, Sample.SampleValue.X);
+		MinY = FMath::Min(MinY, Sample.SampleValue.Y);
+		MaxY = FMath::Max(MaxY, Sample.SampleValue.Y);
+	}
+
+	// Use symmetric range based on max absolute value
+	float MaxAbsX = FMath::Max(FMath::Abs(MinX), FMath::Abs(MaxX));
+	float MaxAbsY = FMath::Max(FMath::Abs(MinY), FMath::Abs(MaxY));
+
+	// Apply padding (10%)
+	const float Padding = 1.1f;
+	MaxAbsX *= Padding;
+	MaxAbsY *= Padding;
+
+	// Round to nearest nice number (multiple of 50)
+	MaxAbsX = FMath::CeilToFloat(MaxAbsX / 50.f) * 50.f;
+	MaxAbsY = FMath::CeilToFloat(MaxAbsY / 50.f) * 50.f;
+
+	// Ensure minimum range
+	MaxAbsX = FMath::Max(MaxAbsX, 100.f);
+	MaxAbsY = FMath::Max(MaxAbsY, 100.f);
+
+	// Access BlendParameters via reflection (it's protected)
+	FProperty* BlendParametersProperty = UBlendSpace::StaticClass()->FindPropertyByName(TEXT("BlendParameters"));
+	if (!BlendParametersProperty)
+	{
+		return;
+	}
+
+	FBlendParameter* BlendParameters = BlendParametersProperty->ContainerPtrToValuePtr<FBlendParameter>(BlendSpace);
+	if (!BlendParameters)
+	{
+		return;
+	}
+
+	// Update axis ranges
+	BlendParameters[0].Min = -MaxAbsX;
+	BlendParameters[0].Max = MaxAbsX;
+	BlendParameters[1].Min = -MaxAbsY;
+	BlendParameters[1].Max = MaxAbsY;
 }
 
 #undef LOCTEXT_NAMESPACE

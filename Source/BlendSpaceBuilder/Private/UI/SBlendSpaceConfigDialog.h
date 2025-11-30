@@ -51,5 +51,6 @@ private:
 	FString OutputAssetName;
 
 	TMap<ELocomotionRole, UAnimSequence*> SelectedAnimations;
+	bool bApplyAnalysis = true;
 	bool bWasAccepted = false;
 };

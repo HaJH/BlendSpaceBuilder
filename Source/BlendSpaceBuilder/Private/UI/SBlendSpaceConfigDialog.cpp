@@ -3,11 +3,14 @@
 
 #include "BlendSpaceBuilderSettings.h"
 #include "LocomotionAnimClassifier.h"
+#include "BlendSpaceFactory.h"
 #include "Animation/Skeleton.h"
 #include "Animation/AnimSequence.h"
 
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SExpandableArea.h"
@@ -159,6 +162,29 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAxisConfigSection()
 					.OnValueCommitted_Lambda([this](float Value, ETextCommit::Type) { YAxisMax = Value; })
 				]
 			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4, 8, 4, 4)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SCheckBox)
+					.IsChecked_Lambda([this]() { return bApplyAnalysis ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+					.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState) { bApplyAnalysis = (NewState == ECheckBoxState::Checked); })
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(4, 0, 0, 0)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("ApplyAnalysis", "Apply Animation Analysis"))
+					.ToolTipText(LOCTEXT("ApplyAnalysisTooltip", "Automatically analyze root motion velocity and adjust sample positions after creation"))
+				]
+			]
 		];
 }
 
@@ -221,6 +247,10 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildRoleRow(ELocomotionRole Role, 
 		}
 	}
 
+	// Add candidate count to role name
+	int32 CandidateCount = CandidateItems.Num();
+	FString RoleNameWithCount = FString::Printf(TEXT("%s (%d)"), *RoleName, CandidateCount);
+
 	TSharedPtr<FClassifiedAnimation> CurrentItem;
 	if (CurrentSelection)
 	{
@@ -240,7 +270,7 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildRoleRow(ELocomotionRole Role, 
 		.VAlign(VAlign_Center)
 		[
 			SNew(STextBlock)
-			.Text(FText::FromString(RoleName))
+			.Text(FText::FromString(RoleNameWithCount))
 		]
 		+ SHorizontalBox::Slot()
 		.FillWidth(0.75f)
@@ -375,6 +405,7 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 	Config.PackagePath = BasePath;
 	Config.AssetName = OutputAssetName;
 	Config.SelectedAnimations = SelectedAnimations;
+	Config.bApplyAnalysis = bApplyAnalysis;
 	return Config;
 }
 

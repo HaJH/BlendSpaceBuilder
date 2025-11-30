@@ -12,6 +12,10 @@ UBlendSpaceBuilderSettings::UBlendSpaceBuilderSettings()
 	{
 		InitializeDefaultPatterns();
 	}
+	if (LeftFootBonePatterns.Num() == 0)
+	{
+		InitializeDefaultFootPatterns();
+	}
 }
 
 void UBlendSpaceBuilderSettings::ResetToDefaultPatterns()
@@ -202,4 +206,29 @@ FString UBlendSpaceBuilderSettings::GetRoleDisplayName(ELocomotionRole Role)
 	case ELocomotionRole::Custom: return TEXT("Custom");
 	default: return TEXT("Unknown");
 	}
+}
+
+void UBlendSpaceBuilderSettings::InitializeDefaultFootPatterns()
+{
+	LeftFootBonePatterns.Empty();
+	LeftFootBonePatterns.Add(TEXT("foot_l"));
+	LeftFootBonePatterns.Add(TEXT("Foot_L"));
+	LeftFootBonePatterns.Add(TEXT("LeftFoot"));
+	LeftFootBonePatterns.Add(TEXT("Left_Foot"));
+	LeftFootBonePatterns.Add(TEXT("l_foot"));
+	LeftFootBonePatterns.Add(TEXT("L_Foot"));
+
+	RightFootBonePatterns.Empty();
+	RightFootBonePatterns.Add(TEXT("foot_r"));
+	RightFootBonePatterns.Add(TEXT("Foot_R"));
+	RightFootBonePatterns.Add(TEXT("RightFoot"));
+	RightFootBonePatterns.Add(TEXT("Right_Foot"));
+	RightFootBonePatterns.Add(TEXT("r_foot"));
+	RightFootBonePatterns.Add(TEXT("R_Foot"));
+}
+
+void UBlendSpaceBuilderSettings::ResetToDefaultFootPatterns()
+{
+	InitializeDefaultFootPatterns();
+	SaveConfig();
 }

@@ -12,7 +12,6 @@ struct FClassifiedAnimation
 	ELocomotionRole Role = ELocomotionRole::Idle;
 	FVector2D BlendSpacePosition = FVector2D::ZeroVector;
 	bool bHasRootMotion = false;
-	float AnalyzedSpeed = 0.f;
 	int32 MatchPriority = 0;
 
 	FString GetDisplayName() const;

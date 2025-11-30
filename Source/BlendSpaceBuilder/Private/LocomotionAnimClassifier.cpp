@@ -12,7 +12,7 @@ FString FClassifiedAnimation::GetDisplayName() const
 		FString Name = Anim->GetName();
 		if (bHasRootMotion)
 		{
-			Name += TEXT(" [RootMotion]");
+			Name += TEXT(" [RM]");
 		}
 		return Name;
 	}
@@ -161,7 +161,6 @@ bool FLocomotionAnimClassifier::ClassifySingleAnimation(UAnimSequence* Anim, FCl
 		OutClassified.BlendSpacePosition = Position;
 		OutClassified.bHasRootMotion = HasRootMotion(Anim);
 		OutClassified.MatchPriority = Priority;
-		OutClassified.AnalyzedSpeed = 0.f;
 		return true;
 	}
 

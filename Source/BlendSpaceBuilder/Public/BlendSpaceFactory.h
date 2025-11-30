@@ -23,6 +23,9 @@ struct FBlendSpaceBuildConfig
 	FString AssetName;
 
 	TMap<ELocomotionRole, UAnimSequence*> SelectedAnimations;
+
+	/** Whether to apply UE5 BlendSpace Analysis after creation */
+	bool bApplyAnalysis = true;
 };
 
 class BLENDSPACEBUILDER_API FBlendSpaceFactory
@@ -36,4 +39,13 @@ private:
 	static void AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Animation, const FVector& Position);
 	static void FinalizeAndSave(UBlendSpace* BlendSpace);
 	static FVector2D GetPositionForRole(ELocomotionRole Role, const FBlendSpaceBuildConfig& Config);
+
+	/** Calculate root motion velocity from animation (X=Right, Y=Forward) */
+	static FVector2D CalculateRootMotionVelocity(const UAnimSequence* Animation);
+
+	/** Apply root motion analysis to the created blend space */
+	static void ApplyAnalysisToBlendSpace(UBlendSpace* BlendSpace);
+
+	/** Auto-adjust axis range based on analyzed sample positions */
+	static void AutoAdjustAxisRange(UBlendSpace* BlendSpace);
 };

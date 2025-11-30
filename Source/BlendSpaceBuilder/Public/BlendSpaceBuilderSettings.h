@@ -99,6 +99,15 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Output")
 	FString OutputAssetSuffix = TEXT("_Locomotion");
 
+	// ============== Locomotion Analysis Settings ==============
+	/** Left foot bone name patterns for locomotion analysis (case-insensitive contains match) */
+	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Analysis", meta = (TitleProperty = ""))
+	TArray<FString> LeftFootBonePatterns;
+
+	/** Right foot bone name patterns for locomotion analysis (case-insensitive contains match) */
+	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Analysis", meta = (TitleProperty = ""))
+	TArray<FString> RightFootBonePatterns;
+
 	// ============== Speed Tiers ==============
 	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Speed", meta = (TitleProperty = "TierName"))
 	TArray<FLocomotionSpeedTier> SpeedTiers;
@@ -111,6 +120,9 @@ public:
 	UFUNCTION(CallInEditor, Category = "BlendSpace|Patterns")
 	void ResetToDefaultPatterns();
 
+	UFUNCTION(CallInEditor, Category = "BlendSpace|Analysis")
+	void ResetToDefaultFootPatterns();
+
 	bool TryMatchPattern(const FString& AnimName, ELocomotionRole& OutRole, FVector2D& OutPosition, int32& OutPriority) const;
 	FVector2D GetPositionForRole(ELocomotionRole Role) const;
 	float GetSpeedForTier(const FString& TierName) const;
@@ -120,4 +132,5 @@ public:
 private:
 	void InitializeDefaultPatterns();
 	void InitializeDefaultSpeedTiers();
+	void InitializeDefaultFootPatterns();
 };
