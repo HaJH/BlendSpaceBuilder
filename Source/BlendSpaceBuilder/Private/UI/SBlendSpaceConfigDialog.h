@@ -95,5 +95,5 @@ private:
 	// Grid configuration
 	int32 GridDivisions = 4;
 	bool bSnapToGrid = true;
-	bool bUseNiceNumbers = true;
+	bool bUseNiceNumbers = false;
 };
