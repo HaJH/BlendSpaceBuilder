@@ -30,6 +30,10 @@ public class BlendSpaceBuilder : ModuleRules
 				"Projects",
 				"EditorSubsystem",
 				"Persona",
+				"AnimationModifiers",
+				"AnimationBlueprintLibrary",
+				"AnimationEditor",
+				"ClassViewer",
 			}
 		);
 	}
