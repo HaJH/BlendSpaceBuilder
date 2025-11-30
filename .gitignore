@@ -1,0 +1,13 @@
+# Build files
+Binaries/
+Intermediate/
+
+# IDE
+.vs/
+.idea/
+*.sln
+*.suo
+
+# Thumbnails
+__pycache__/
+*.pyc

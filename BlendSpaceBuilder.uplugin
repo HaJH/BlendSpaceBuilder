@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "BlendSpaceBuilder",
+	"Description": "Automatically generate locomotion blend spaces from skeleton animations",
+	"Category": "Animation",
+	"CreatedBy": "Jeonghyeon Ha",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "BlendSpaceBuilder",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
