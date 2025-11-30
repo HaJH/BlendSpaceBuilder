@@ -1,14 +1,18 @@
 # BlendSpace Builder
 
-An Unreal Engine editor plugin that automatically generates 2D locomotion blend spaces from skeleton animations.
+An Unreal Engine editor plugin that automatically generates 2D locomotion blend spaces from skeleton animations with velocity analysis.
 
 ## Features
 
 - **Context Menu Integration**: Right-click on Skeleton or Skeletal Mesh assets to generate blend spaces
 - **Automatic Animation Classification**: Uses regex patterns to identify locomotion animations (Idle, Walk, Run, Sprint in 8 directions)
+- **Velocity Analysis**: Two analysis modes for automatic sample positioning:
+  - **Root Motion**: Calculates velocity from root motion translation
+  - **Locomotion**: Analyzes foot bone movement for in-place animations
+- **Automatic Axis Range**: Calculates optimal axis ranges based on analyzed velocities
+- **Grid Configuration**: Customize grid divisions, snap-to-grid, and nice number rounding
 - **Root Motion Priority**: Automatically prefers root motion animations when multiple candidates exist
-- **Data Asset Configuration**: Customize name patterns and speed tiers via data assets
-- **Modal Dialog UI**: Configure axis ranges, select animations, and set output path before generation
+- **Foot Bone Detection**: Auto-detects left/right foot bones from skeleton
 
 ## Requirements
 
@@ -37,14 +41,39 @@ git submodule add https://github.com/YourUsername/BlendSpaceBuilder.git
 2. Right-click on a **Skeleton** or **Skeletal Mesh** asset
 3. Select **"Generate Locomotion BlendSpace"**
 4. In the dialog:
-   - Adjust axis ranges if needed (default: -500 to 500)
-   - Review and select animations for each locomotion role
+   - Select animations for each locomotion role
+   - Choose analysis type (Root Motion or Locomotion)
+   - Click **"Analyze Samples"** to calculate velocities
+   - Adjust grid settings (divisions, snap, nice numbers)
+   - Review calculated axis ranges
    - Set output asset name
 5. Click **"Create BlendSpace"**
 
-## Configuration
+## Analysis Modes
 
-### Editor Settings
+### Root Motion Analysis
+Extracts velocity from the animation's root motion data. Best for animations that have root motion enabled.
+
+### Locomotion Analysis
+Calculates character velocity by analyzing foot bone movement during ground contact phases. Useful for in-place animations without root motion.
+
+The plugin automatically detects foot bones using common naming patterns:
+- Left foot: `foot_l`, `l_foot`, `leftfoot`, `left_foot`
+- Right foot: `foot_r`, `r_foot`, `rightfoot`, `right_foot`
+
+## Grid Configuration
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Grid Divisions | Number of grid divisions (1-16) | 4 |
+| Snap to Grid | Snap samples to grid points | true |
+| Use Nice Numbers | Round axis range to nice values (10, 25, 50, 100...) | true |
+
+**Nice Numbers Example** (max velocity = 110, divisions = 4):
+- With Nice Numbers: Range ±200, Step = 100
+- Without Nice Numbers: Range ±122, Step = 61
+
+## Editor Settings
 
 Access via **Project Settings > Plugins > BlendSpace Builder**:
 
@@ -56,23 +85,8 @@ Access via **Project Settings > Plugins > BlendSpace Builder**:
 | Y Axis Name | Vertical axis label | ForwardVelocity |
 | Prefer Root Motion | Prioritize root motion animations | true |
 | Output Asset Suffix | Suffix for generated asset name | _Locomotion |
-| Default Pattern Asset | Custom pattern data asset | (none) |
-
-### Pattern Data Asset
-
-Create a `ULocomotionPatternDataAsset` to customize animation name matching:
-
-**Speed Tiers** define velocity values for each movement type:
-- Walk: 200
-- Run: 400
-- Sprint: 600
-
-**Pattern Entries** use regex to match animation names:
-```
-Pattern: "idle"           → Role: Idle           (0, 0)
-Pattern: "walk.*fwd"      → Role: WalkForward    (0, WalkSpeed)
-Pattern: "run.*left"      → Role: RunLeft        (-RunSpeed, 0)
-```
+| Left Foot Patterns | Regex patterns for left foot bone | foot_l, l_foot, ... |
+| Right Foot Patterns | Regex patterns for right foot bone | foot_r, r_foot, ... |
 
 ## Supported Locomotion Roles
 
@@ -115,26 +129,17 @@ BlendSpaceBuilder/
     ├── Public/
     │   ├── BlendSpaceBuilder.h              # Module class
     │   ├── BlendSpaceBuilderSettings.h      # Editor settings
-    │   ├── LocomotionPatternDataAsset.h     # Pattern configuration
     │   ├── LocomotionAnimClassifier.h       # Animation classifier
-    │   └── BlendSpaceFactory.h              # BlendSpace creator
+    │   └── BlendSpaceFactory.h              # BlendSpace creator & analyzer
     └── Private/
         ├── BlendSpaceBuilder.cpp
         ├── BlendSpaceBuilderSettings.cpp
-        ├── LocomotionPatternDataAsset.cpp
         ├── LocomotionAnimClassifier.cpp
         ├── BlendSpaceFactory.cpp
         └── UI/
             ├── SBlendSpaceConfigDialog.*    # Main dialog
             └── SLocomotionAnimSelector.*    # Animation selector
 ```
-
-## Future Plans
-
-- [ ] Root motion analysis for automatic speed detection
-- [ ] Auto-configure axis ranges based on analyzed speeds
-- [ ] 1D BlendSpace support
-- [ ] Aim Offset generation
 
 ## License
 
