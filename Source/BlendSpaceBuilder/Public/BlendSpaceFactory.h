@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "LocomotionPatternDataAsset.h"
+#include "BlendSpaceBuilderSettings.h"
 
 class UBlendSpace;
 class UAnimSequence;

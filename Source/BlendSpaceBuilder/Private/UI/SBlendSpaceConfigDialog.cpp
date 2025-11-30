@@ -3,7 +3,6 @@
 
 #include "BlendSpaceBuilderSettings.h"
 #include "LocomotionAnimClassifier.h"
-#include "LocomotionPatternDataAsset.h"
 #include "Animation/Skeleton.h"
 #include "Animation/AnimSequence.h"
 
@@ -210,7 +209,7 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnimationSelectionSection()
 
 TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildRoleRow(ELocomotionRole Role, FLocomotionRoleCandidates* Candidates)
 {
-	FString RoleName = ULocomotionPatternDataAsset::GetRoleDisplayName(Role);
+	FString RoleName = UBlendSpaceBuilderSettings::GetRoleDisplayName(Role);
 	UAnimSequence* CurrentSelection = SelectedAnimations.FindRef(Role);
 
 	TArray<TSharedPtr<FClassifiedAnimation>> CandidateItems;

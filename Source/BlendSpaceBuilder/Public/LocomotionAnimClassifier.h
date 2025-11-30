@@ -1,11 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "LocomotionPatternDataAsset.h"
+#include "BlendSpaceBuilderSettings.h"
 
 class UAnimSequence;
 class USkeleton;
-class ULocomotionPatternDataAsset;
 
 struct FClassifiedAnimation
 {
@@ -30,7 +29,7 @@ struct FLocomotionRoleCandidates
 class BLENDSPACEBUILDER_API FLocomotionAnimClassifier
 {
 public:
-	FLocomotionAnimClassifier(const ULocomotionPatternDataAsset* InPatternAsset);
+	FLocomotionAnimClassifier();
 
 	void FindAnimationsForSkeleton(const USkeleton* Skeleton);
 	void ClassifyAnimations();
@@ -46,7 +45,6 @@ private:
 	bool ClassifySingleAnimation(UAnimSequence* Anim, FClassifiedAnimation& OutClassified);
 	bool HasRootMotion(const UAnimSequence* Anim) const;
 
-	const ULocomotionPatternDataAsset* PatternAsset;
 	TArray<TWeakObjectPtr<UAnimSequence>> AllAnimations;
 	TMap<ELocomotionRole, FLocomotionRoleCandidates> ClassifiedResults;
 	TArray<TWeakObjectPtr<UAnimSequence>> UnclassifiedAnimations;

@@ -114,10 +114,7 @@ void FBlendSpaceBuilderModule::ExecuteGenerateLocomotionBlendSpace(TArray<FAsset
 		return;
 	}
 
-	UBlendSpaceBuilderSettings* Settings = UBlendSpaceBuilderSettings::Get();
-	ULocomotionPatternDataAsset* PatternAsset = Settings->DefaultPatternAsset.LoadSynchronous();
-
-	FLocomotionAnimClassifier Classifier(PatternAsset);
+	FLocomotionAnimClassifier Classifier;
 	Classifier.FindAnimationsForSkeleton(TargetSkeleton);
 	Classifier.ClassifyAnimations();
 

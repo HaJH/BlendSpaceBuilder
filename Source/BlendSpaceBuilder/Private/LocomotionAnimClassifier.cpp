@@ -49,8 +49,7 @@ FClassifiedAnimation* FLocomotionRoleCandidates::GetRecommended(bool bPreferRoot
 	return Best;
 }
 
-FLocomotionAnimClassifier::FLocomotionAnimClassifier(const ULocomotionPatternDataAsset* InPatternAsset)
-	: PatternAsset(InPatternAsset)
+FLocomotionAnimClassifier::FLocomotionAnimClassifier()
 {
 }
 
@@ -144,7 +143,8 @@ void FLocomotionAnimClassifier::ClassifyAnimations()
 
 bool FLocomotionAnimClassifier::ClassifySingleAnimation(UAnimSequence* Anim, FClassifiedAnimation& OutClassified)
 {
-	if (!PatternAsset)
+	const UBlendSpaceBuilderSettings* Settings = UBlendSpaceBuilderSettings::Get();
+	if (!Settings)
 	{
 		return false;
 	}
@@ -154,7 +154,7 @@ bool FLocomotionAnimClassifier::ClassifySingleAnimation(UAnimSequence* Anim, FCl
 	FVector2D Position;
 	int32 Priority;
 
-	if (PatternAsset->TryMatchPattern(AnimName, MatchedRole, Position, Priority))
+	if (Settings->TryMatchPattern(AnimName, MatchedRole, Position, Priority))
 	{
 		OutClassified.Animation = Anim;
 		OutClassified.Role = MatchedRole;
