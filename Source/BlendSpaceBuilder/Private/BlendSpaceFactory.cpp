@@ -129,15 +129,18 @@ namespace BlendSpaceAnalysisInternal
 		return FVector(Velocity.X, Velocity.Y, 0.f);
 	}
 
-	// Calculate locomotion velocity from a single foot bone
-	// Based on engine's LocomotionAnalysis.cpp implementation
-	FVector CalculateLocomotionVelocityFromFoot(const UAnimSequence* Animation, FName FootBoneName)
+	// Helper: Collect foot positions from animation
+	bool CollectFootPositions(
+		const UAnimSequence* Animation,
+		FName FootBoneName,
+		TArray<FVector>& OutPositions,
+		double& OutDeltaTime)
 	{
 		if (!Animation || FootBoneName == NAME_None)
 		{
 			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: Invalid input (Anim=%s, Bone=%s)"),
 				Animation ? *Animation->GetName() : TEXT("null"), *FootBoneName.ToString());
-			return FVector::ZeroVector;
+			return false;
 		}
 
 		const int32 NumKeys = Animation->GetNumberOfSampledKeys();
@@ -145,7 +148,7 @@ namespace BlendSpaceAnalysisInternal
 		{
 			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' has insufficient keys (%d)"),
 				*Animation->GetName(), NumKeys);
-			return FVector::ZeroVector;
+			return false;
 		}
 
 		USkeleton* Skeleton = Animation->GetSkeleton();
@@ -153,7 +156,7 @@ namespace BlendSpaceAnalysisInternal
 		{
 			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' has no skeleton"),
 				*Animation->GetName());
-			return FVector::ZeroVector;
+			return false;
 		}
 
 		int32 BoneIndex = Skeleton->GetReferenceSkeleton().FindBoneIndex(FootBoneName);
@@ -161,85 +164,110 @@ namespace BlendSpaceAnalysisInternal
 		{
 			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' foot bone '%s' not found in skeleton"),
 				*Animation->GetName(), *FootBoneName.ToString());
-			return FVector::ZeroVector;
+			return false;
 		}
 
 		const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
-		double DeltaTime = Animation->GetPlayLength() / double(NumKeys);
+		OutDeltaTime = Animation->GetPlayLength() / double(NumKeys);
 
-		// 1. Collect positions at each key (in component space)
-		TArray<FVector> Positions;
-		Positions.SetNum(NumKeys);
-
-		double MinHeight = DBL_MAX;
-		double MaxHeight = -DBL_MAX;
-
+		OutPositions.SetNum(NumKeys);
 		for (int32 Key = 0; Key < NumKeys; ++Key)
 		{
-			// Use component space transform (not bone local)
 			FTransform ComponentSpaceTM = GetComponentSpaceTransform(
-				Animation, RefSkeleton, BoneIndex, Key * DeltaTime);
-			Positions[Key] = ComponentSpaceTM.GetTranslation();
-
-			double Height = Positions[Key].Z;
-			MinHeight = FMath::Min(MinHeight, Height);
-			MaxHeight = FMath::Max(MaxHeight, Height);
+				Animation, RefSkeleton, BoneIndex, Key * OutDeltaTime);
+			OutPositions[Key] = ComponentSpaceTM.GetTranslation();
 		}
 
-		// Handle case where foot doesn't move vertically
-		if (MaxHeight - MinHeight < KINDA_SMALL_NUMBER)
+		return true;
+	}
+
+	// Calculate locomotion velocity using simple average (no weighting)
+	FVector CalculateLocomotionVelocityFromFootSimple(const UAnimSequence* Animation, FName FootBoneName)
+	{
+		TArray<FVector> Positions;
+		double DeltaTime;
+		if (!CollectFootPositions(Animation, FootBoneName, Positions, DeltaTime))
 		{
-			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' foot '%s' has no vertical movement (Height range: %.2f)"),
-				*Animation->GetName(), *FootBoneName.ToString(), MaxHeight - MinHeight);
 			return FVector::ZeroVector;
 		}
 
-		// 2. Calculate velocities using central difference
+		const int32 NumKeys = Positions.Num();
+
+		// Calculate velocities using forward difference
 		TArray<FVector> Velocities;
 		Velocities.SetNum(NumKeys);
-
-		for (int32 Key = 0; Key < NumKeys; ++Key)
+		for (int32 Key = 0; Key < NumKeys - 1; ++Key)
 		{
-			int32 PrevKey = (Key + NumKeys - 1) % NumKeys;
-			int32 NextKey = (Key + 1) % NumKeys;
-			Velocities[Key] = (Positions[NextKey] - Positions[PrevKey]) / (2.0 * DeltaTime);
+			Velocities[Key] = (Positions[Key + 1] - Positions[Key]) / DeltaTime;
 		}
+		Velocities[NumKeys - 1] = Velocities[NumKeys - 2];
 
-		// 3. Calculate height-biased velocity (lower = more weight = ground contact)
-		FVector BiasedVelocity = FVector::ZeroVector;
-		double TotalWeight = 0;
-
-		for (int32 Key = 0; Key < NumKeys; ++Key)
+		// Simple average of all velocities
+		FVector AvgVelocity = FVector::ZeroVector;
+		for (const FVector& Vel : Velocities)
 		{
-			double Height = Positions[Key].Z;
-			double Weight = 1.0 - (Height - MinHeight) / (MaxHeight - MinHeight + KINDA_SMALL_NUMBER);
-			BiasedVelocity += Velocities[Key] * Weight;
-			TotalWeight += Weight;
+			AvgVelocity += Vel;
 		}
+		AvgVelocity /= NumKeys;
 
-		if (TotalWeight > KINDA_SMALL_NUMBER)
-		{
-			BiasedVelocity /= TotalWeight;
-		}
-
-		// Character velocity is opposite of foot velocity during ground contact
-		FVector CharacterVelocity = -BiasedVelocity * Animation->RateScale;
-
-		// UE coordinates: X=Forward, Y=Right, Z=Up
-		// BlendSpace: X=Right, Y=Forward (2D only, Z must be 0)
-		// Note: Component space from GetBoneTransform uses Y=Forward, X=Right convention
-		UE_LOG(LogBlendSpaceBuilder, Verbose, TEXT("Locomotion: '%s' foot '%s' -> Velocity(%.1f, %.1f)"),
+		FVector CharacterVelocity = -AvgVelocity * Animation->RateScale;
+		UE_LOG(LogBlendSpaceBuilder, Verbose, TEXT("LocomotionSimple: '%s' foot '%s' -> Velocity(%.1f, %.1f)"),
 			*Animation->GetName(), *FootBoneName.ToString(), CharacterVelocity.X, CharacterVelocity.Y);
 		return FVector(CharacterVelocity.X, CharacterVelocity.Y, 0.f);
 	}
 
-	// Calculate locomotion velocity using both feet
-	FVector CalculateLocomotionVelocity(const UAnimSequence* Animation, FName LeftFootBone, FName RightFootBone)
+	// Calculate locomotion velocity using stride length (max - min position)
+	FVector CalculateLocomotionVelocityFromFootStride(const UAnimSequence* Animation, FName FootBoneName)
 	{
-		FVector LeftVel = CalculateLocomotionVelocityFromFoot(Animation, LeftFootBone);
-		FVector RightVel = CalculateLocomotionVelocityFromFoot(Animation, RightFootBone);
+		TArray<FVector> Positions;
+		double DeltaTime;
+		if (!CollectFootPositions(Animation, FootBoneName, Positions, DeltaTime))
+		{
+			return FVector::ZeroVector;
+		}
 
-		// Average velocities from both feet
+		const int32 NumKeys = Positions.Num();
+		double PlayLength = Animation->GetPlayLength();
+		if (PlayLength <= KINDA_SMALL_NUMBER)
+		{
+			return FVector::ZeroVector;
+		}
+
+		// Find min/max positions for X and Y
+		double MinX = DBL_MAX, MaxX = -DBL_MAX;
+		double MinY = DBL_MAX, MaxY = -DBL_MAX;
+
+		for (int32 Key = 0; Key < NumKeys; ++Key)
+		{
+			MinX = FMath::Min(MinX, Positions[Key].X);
+			MaxX = FMath::Max(MaxX, Positions[Key].X);
+			MinY = FMath::Min(MinY, Positions[Key].Y);
+			MaxY = FMath::Max(MaxY, Positions[Key].Y);
+		}
+
+		// Stride length = max - min for each axis
+		double StrideX = MaxX - MinX;
+		double StrideY = MaxY - MinY;
+
+		// Velocity = Stride / PlayLength (assuming one full cycle)
+		// Note: This gives speed magnitude, we need to determine direction
+		// For locomotion, Y is forward direction, X is right direction
+		FVector CharacterVelocity;
+		CharacterVelocity.X = StrideX / PlayLength * Animation->RateScale;
+		CharacterVelocity.Y = StrideY / PlayLength * Animation->RateScale;
+		CharacterVelocity.Z = 0.f;
+
+		UE_LOG(LogBlendSpaceBuilder, Verbose, TEXT("LocomotionStride: '%s' foot '%s' -> Stride(%.1f, %.1f) Velocity(%.1f, %.1f)"),
+			*Animation->GetName(), *FootBoneName.ToString(), StrideX, StrideY, CharacterVelocity.X, CharacterVelocity.Y);
+		return CharacterVelocity;
+	}
+
+	// Calculate locomotion velocity using both feet (Simple average)
+	FVector CalculateLocomotionVelocitySimple(const UAnimSequence* Animation, FName LeftFootBone, FName RightFootBone)
+	{
+		FVector LeftVel = CalculateLocomotionVelocityFromFootSimple(Animation, LeftFootBone);
+		FVector RightVel = CalculateLocomotionVelocityFromFootSimple(Animation, RightFootBone);
+
 		int32 Count = 0;
 		FVector TotalVel = FVector::ZeroVector;
 
@@ -254,12 +282,30 @@ namespace BlendSpaceAnalysisInternal
 			Count++;
 		}
 
-		if (Count > 0)
-		{
-			return TotalVel / Count;
-		}
+		return (Count > 0) ? TotalVel / Count : FVector::ZeroVector;
+	}
 
-		return FVector::ZeroVector;
+	// Calculate locomotion velocity using both feet (Stride-based)
+	// Combines Simple (direction) + Stride (magnitude) for accurate results
+	FVector CalculateLocomotionVelocityStride(const UAnimSequence* Animation, FName LeftFootBone, FName RightFootBone)
+	{
+		// Get direction from Simple method (accurate direction, but magnitude may be off)
+		FVector SimpleVel = CalculateLocomotionVelocitySimple(Animation, LeftFootBone, RightFootBone);
+
+		// Get magnitude from Stride method (accurate magnitude, but always positive)
+		FVector LeftStride = CalculateLocomotionVelocityFromFootStride(Animation, LeftFootBone);
+		FVector RightStride = CalculateLocomotionVelocityFromFootStride(Animation, RightFootBone);
+		FVector StrideVel = LeftStride + RightStride;  // Sum for 2-step cycle
+
+		// Combine: direction from Simple, magnitude from Stride
+		FVector Direction = SimpleVel.GetSafeNormal();
+		float Magnitude = StrideVel.Size2D();  // Use 2D magnitude (X, Y only)
+
+		FVector Result = Direction * Magnitude;
+		UE_LOG(LogBlendSpaceBuilder, Verbose, TEXT("LocomotionStride: Combined Simple dir(%.2f, %.2f) * Stride mag(%.1f) = (%.1f, %.1f)"),
+			Direction.X, Direction.Y, Magnitude, Result.X, Result.Y);
+
+		return FVector(Result.X, Result.Y, 0.f);
 	}
 }
 
@@ -328,16 +374,55 @@ UBlendSpace* FBlendSpaceFactory::CreateLocomotionBlendSpace(const FBlendSpaceBui
 	return BlendSpace;
 }
 
+// Get direction sign based on locomotion role
+FVector2D GetRoleDirectionSign(ELocomotionRole Role)
+{
+	switch (Role)
+	{
+	case ELocomotionRole::Idle:
+		return FVector2D(0, 0);
+	case ELocomotionRole::WalkForward:
+	case ELocomotionRole::RunForward:
+	case ELocomotionRole::SprintForward:
+		return FVector2D(0, 1);
+	case ELocomotionRole::WalkBackward:
+	case ELocomotionRole::RunBackward:
+		return FVector2D(0, -1);
+	case ELocomotionRole::WalkLeft:
+	case ELocomotionRole::RunLeft:
+		return FVector2D(-1, 0);
+	case ELocomotionRole::WalkRight:
+	case ELocomotionRole::RunRight:
+		return FVector2D(1, 0);
+	case ELocomotionRole::WalkForwardLeft:
+	case ELocomotionRole::RunForwardLeft:
+		return FVector2D(-1, 1);
+	case ELocomotionRole::WalkForwardRight:
+	case ELocomotionRole::RunForwardRight:
+		return FVector2D(1, 1);
+	case ELocomotionRole::WalkBackwardLeft:
+	case ELocomotionRole::RunBackwardLeft:
+		return FVector2D(-1, -1);
+	case ELocomotionRole::WalkBackwardRight:
+	case ELocomotionRole::RunBackwardRight:
+		return FVector2D(1, -1);
+	default:
+		return FVector2D(0, 1);  // Default to forward
+	}
+}
+
 TMap<UAnimSequence*, FVector> FBlendSpaceFactory::AnalyzeSamplePositions(
 	const TMap<ELocomotionRole, UAnimSequence*>& Animations,
 	EBlendSpaceAnalysisType AnalysisType,
 	FName LeftFootBone,
-	FName RightFootBone)
+	FName RightFootBone,
+	float StrideMultiplier)
 {
 	TMap<UAnimSequence*, FVector> Result;
 
 	for (const auto& Pair : Animations)
 	{
+		ELocomotionRole Role = Pair.Key;
 		UAnimSequence* Anim = Pair.Value;
 		if (!Anim)
 		{
@@ -345,13 +430,34 @@ TMap<UAnimSequence*, FVector> FBlendSpaceFactory::AnalyzeSamplePositions(
 		}
 
 		FVector Position;
-		if (AnalysisType == EBlendSpaceAnalysisType::RootMotion)
+		switch (AnalysisType)
 		{
+		case EBlendSpaceAnalysisType::RootMotion:
 			Position = BlendSpaceAnalysisInternal::CalculateRootMotionVelocity(Anim);
-		}
-		else
-		{
-			Position = BlendSpaceAnalysisInternal::CalculateLocomotionVelocity(Anim, LeftFootBone, RightFootBone);
+			break;
+		case EBlendSpaceAnalysisType::LocomotionSimple:
+			Position = BlendSpaceAnalysisInternal::CalculateLocomotionVelocitySimple(Anim, LeftFootBone, RightFootBone);
+			break;
+		case EBlendSpaceAnalysisType::LocomotionStride:
+			{
+				// Get magnitude from stride analysis
+				FVector StrideVel = BlendSpaceAnalysisInternal::CalculateLocomotionVelocityStride(Anim, LeftFootBone, RightFootBone);
+				float Magnitude = StrideVel.Size2D() * StrideMultiplier;  // Apply multiplier
+
+				// Apply direction based on role
+				FVector2D DirSign = GetRoleDirectionSign(Role);
+				if (DirSign.IsNearlyZero())
+				{
+					Position = FVector::ZeroVector;  // Idle
+				}
+				else
+				{
+					// Normalize direction and apply magnitude
+					FVector2D Dir = DirSign.GetSafeNormal();
+					Position = FVector(Dir.X * Magnitude, Dir.Y * Magnitude, 0.f);
+				}
+			}
+			break;
 		}
 
 		Result.Add(Anim, Position);

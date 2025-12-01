@@ -96,4 +96,7 @@ private:
 	int32 GridDivisions = 4;
 	bool bSnapToGrid = true;
 	bool bUseNiceNumbers = false;
+
+	// Stride analysis multiplier (to compensate for underestimation)
+	float StrideMultiplier = 1.4f;
 };

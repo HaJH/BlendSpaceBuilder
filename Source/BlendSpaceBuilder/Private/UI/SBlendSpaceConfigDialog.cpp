@@ -165,9 +165,12 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisSection()
 					+ SSegmentedControl<EBlendSpaceAnalysisType>::Slot(EBlendSpaceAnalysisType::RootMotion)
 					.Text(LOCTEXT("RootMotion", "Root Motion"))
 					.ToolTip(LOCTEXT("RootMotionTip", "Calculate position from root motion velocity"))
-					+ SSegmentedControl<EBlendSpaceAnalysisType>::Slot(EBlendSpaceAnalysisType::Locomotion)
-					.Text(LOCTEXT("Locomotion", "Locomotion"))
-					.ToolTip(LOCTEXT("LocomotionTip", "Calculate position from foot movement (for in-place animations)"))
+					+ SSegmentedControl<EBlendSpaceAnalysisType>::Slot(EBlendSpaceAnalysisType::LocomotionSimple)
+					.Text(LOCTEXT("LocomotionSimple", "Loco (Simple)"))
+					.ToolTip(LOCTEXT("LocomotionSimpleTip", "Simple average of all foot velocities"))
+					+ SSegmentedControl<EBlendSpaceAnalysisType>::Slot(EBlendSpaceAnalysisType::LocomotionStride)
+					.Text(LOCTEXT("LocomotionStride", "Loco (Stride)"))
+					.ToolTip(LOCTEXT("LocomotionStrideTip", "Stride length / play time"))
 				]
 			]
 			// Foot Bone Info (only shown when Locomotion is selected)
@@ -179,6 +182,37 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisSection()
 				.Visibility(this, &SBlendSpaceConfigDialog::GetFootBoneVisibility)
 				.Text(this, &SBlendSpaceConfigDialog::GetFootBoneText)
 				.ColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f)))
+			]
+			// Stride Multiplier (only shown when Stride is selected)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				.Visibility_Lambda([this]() {
+					return (SelectedAnalysisType == EBlendSpaceAnalysisType::LocomotionStride)
+						? EVisibility::Visible : EVisibility::Collapsed;
+				})
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.3f)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("StrideMultiplier", "Stride Multiplier:"))
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.7f)
+				[
+					SNew(SSpinBox<float>)
+					.MinValue(0.5f)
+					.MaxValue(3.0f)
+					.MinSliderValue(0.5f)
+					.MaxSliderValue(3.0f)
+					.Delta(0.1f)
+					.Value_Lambda([this]() { return StrideMultiplier; })
+					.OnValueChanged_Lambda([this](float NewValue) { StrideMultiplier = NewValue; })
+					.ToolTipText(LOCTEXT("StrideMultiplierTip", "Multiplier to compensate for stride underestimation (default: 1.4)"))
+				]
 			]
 			// Analyze Button
 			+ SVerticalBox::Slot()
@@ -591,7 +625,8 @@ FReply SBlendSpaceConfigDialog::OnAnalyzeClicked()
 		SelectedAnimations,
 		SelectedAnalysisType,
 		DetectedLeftFootBone,
-		DetectedRightFootBone);
+		DetectedRightFootBone,
+		StrideMultiplier);
 
 	// Calculate axis range with grid settings
 	FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
@@ -731,7 +766,8 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 
 EVisibility SBlendSpaceConfigDialog::GetFootBoneVisibility() const
 {
-	return (SelectedAnalysisType == EBlendSpaceAnalysisType::Locomotion)
+	return (SelectedAnalysisType == EBlendSpaceAnalysisType::LocomotionSimple ||
+			SelectedAnalysisType == EBlendSpaceAnalysisType::LocomotionStride)
 		? EVisibility::Visible
 		: EVisibility::Collapsed;
 }
@@ -772,12 +808,6 @@ FText SBlendSpaceConfigDialog::GetAnalysisResultsText() const
 		if (PosPtr)
 		{
 			FString AnimName = Anim->GetName();
-			// Truncate long names
-			if (AnimName.Len() > 20)
-			{
-				AnimName = AnimName.Left(17) + TEXT("...");
-			}
-
 			ResultStr += FString::Printf(TEXT("%s: (%.0f, %.0f)\n"),
 				*AnimName, PosPtr->X, PosPtr->Y);
 		}

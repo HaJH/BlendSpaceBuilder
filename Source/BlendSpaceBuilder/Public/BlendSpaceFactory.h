@@ -12,8 +12,10 @@ enum class EBlendSpaceAnalysisType : uint8
 {
 	/** Root Motion based velocity analysis */
 	RootMotion,
-	/** Foot movement based locomotion analysis */
-	Locomotion,
+	/** Foot movement based locomotion analysis - simple average of velocities */
+	LocomotionSimple,
+	/** Foot movement based locomotion analysis - stride length / play time */
+	LocomotionStride,
 };
 
 struct FBlendSpaceBuildConfig
@@ -66,13 +68,15 @@ public:
 	/**
 	 * Analyze animations and calculate sample positions.
 	 * Call this from UI before Create to preview/validate analysis results.
+	 * @param StrideMultiplier Multiplier for Stride analysis (default 1.4 to compensate for underestimation)
 	 * @return Map of Animation -> calculated position (X=Right, Y=Forward, Z=0)
 	 */
 	static TMap<UAnimSequence*, FVector> AnalyzeSamplePositions(
 		const TMap<ELocomotionRole, UAnimSequence*>& Animations,
 		EBlendSpaceAnalysisType AnalysisType,
 		FName LeftFootBone = NAME_None,
-		FName RightFootBone = NAME_None);
+		FName RightFootBone = NAME_None,
+		float StrideMultiplier = 1.4f);
 
 	/**
 	 * Calculate symmetric axis range from analyzed positions with padding.
