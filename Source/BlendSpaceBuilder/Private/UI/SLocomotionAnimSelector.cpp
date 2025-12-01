@@ -22,6 +22,11 @@ void SLocomotionAnimSelector::Construct(const FArguments& InArgs)
 	{
 		// Default to first actual animation if available
 		CurrentSelection = CandidateItems[1];
+		// Notify parent of default selection so it gets added to SelectedAnimations
+		if (CurrentSelection.IsValid() && CurrentSelection->Animation.IsValid())
+		{
+			OnAnimationSelectedDelegate.ExecuteIfBound(CurrentSelection->Animation.Get());
+		}
 	}
 
 	ChildSlot
