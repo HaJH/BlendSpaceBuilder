@@ -23,6 +23,7 @@ private:
 	void ExecuteGenerateLocomotionBlendSpace(TArray<FAssetData> SelectedAssets);
 	void ExecuteApplyModifierToAllSamples(TArray<FAssetData> SelectedAssets);
 	void ExecuteOpenAllSamplesInEditor(TArray<FAssetData> SelectedAssets);
+	void ExecuteAdjustAxisRange(TArray<FAssetData> SelectedAssets);
 
 	// Helper functions
 	TArray<UAnimSequence*> GetAnimationsFromBlendSpace(UBlendSpace* BlendSpace);

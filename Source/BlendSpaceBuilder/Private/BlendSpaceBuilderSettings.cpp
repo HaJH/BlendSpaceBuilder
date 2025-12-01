@@ -116,6 +116,22 @@ void UBlendSpaceBuilderSettings::InitializeDefaultPatterns()
 	// ============== Simple Anim_ Style (Priority 40) ==============
 	PatternEntries.Add({TEXT("Anim.*walk$"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 40});
 	PatternEntries.Add({TEXT("Anim.*run$"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 40});
+
+	// ============== Walking/Running variants (Priority 50) ==============
+	// Walking variants: Walking, walking
+	PatternEntries.Add({TEXT("walking"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 50});
+	// Running variants: Running, running
+	PatternEntries.Add({TEXT("running"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 50});
+
+	// ============== Standalone Walk/Run (Priority 30) ==============
+	// Matches: Walk, Run, Walk_1, Run_1 (after suffix strip)
+	PatternEntries.Add({TEXT("^walk$"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 30});
+	PatternEntries.Add({TEXT("^run$"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 30});
+
+	// ============== Ending with Walk/Run (Priority 25) ==============
+	// Matches: AS_walk, AS_run, Char_walk, Char_run (after suffix strip)
+	PatternEntries.Add({TEXT("walk$"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 25});
+	PatternEntries.Add({TEXT("run$"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 25});
 }
 
 bool UBlendSpaceBuilderSettings::TryMatchPattern(const FString& AnimName, ELocomotionRole& OutRole, FVector2D& OutPosition, int32& OutPriority) const
@@ -339,10 +355,12 @@ void UBlendSpaceBuilderSettings::InitializeDefaultIgnorableSuffixes()
 	IgnorableSuffixes.Empty();
 	// Root Motion related
 	IgnorableSuffixes.Add(TEXT("_RootMotion"));
+	IgnorableSuffixes.Add(TEXT("_root_motion"));
 	IgnorableSuffixes.Add(TEXT("_RM"));
 	// In Place related
 	IgnorableSuffixes.Add(TEXT("_InPlace"));
 	IgnorableSuffixes.Add(TEXT("_inplace"));
+	IgnorableSuffixes.Add(TEXT("_in_place"));
 	IgnorableSuffixes.Add(TEXT("_IP"));
 	// Other ignorable suffixes
 	IgnorableSuffixes.Add(TEXT("_NEW"));

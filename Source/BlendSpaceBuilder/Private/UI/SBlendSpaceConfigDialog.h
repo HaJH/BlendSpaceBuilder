@@ -65,6 +65,9 @@ private:
 	bool bAnalysisPerformed = false;
 	bool bUseAnalyzedPositions = true;
 
+	// Max speed from analysis (used for Reset to Role Defaults)
+	float AnalyzedMaxSpeed = 0.f;
+
 	// Calculated axis range from analysis
 	float AnalyzedXMin = -500.f;
 	float AnalyzedXMax = 500.f;
@@ -78,6 +81,7 @@ private:
 
 	// Event handlers
 	FReply OnAnalyzeClicked();
+	FReply OnResetToRoleDefaultsClicked();
 	void OnAnalysisTypeChanged(EBlendSpaceAnalysisType NewType);
 	void OnGridDivisionsChanged(int32 NewValue);
 	void OnSnapToGridChanged(ECheckBoxState NewState);
@@ -98,5 +102,8 @@ private:
 	bool bUseNiceNumbers = false;
 
 	// Stride analysis multiplier (to compensate for underestimation)
-	float StrideMultiplier = 1.4f;
+	float StrideMultiplier = 1.0f;
+
+	// Scale divisor (to handle different skeleton scales)
+	float ScaleDivisor = 1.0f;
 };

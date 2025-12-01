@@ -37,13 +37,24 @@ FClassifiedAnimation* FLocomotionRoleCandidates::GetRecommended(bool bPreferRoot
 		}
 	}
 
-	// Return highest priority
+	// Return highest priority, prefer shorter names when priority is equal
+	// (e.g., "Idle" should be preferred over "Idle01")
 	FClassifiedAnimation* Best = &Candidates[0];
 	for (FClassifiedAnimation& Candidate : Candidates)
 	{
 		if (Candidate.MatchPriority > Best->MatchPriority)
 		{
 			Best = &Candidate;
+		}
+		else if (Candidate.MatchPriority == Best->MatchPriority)
+		{
+			// Prefer shorter names (Idle > Idle01)
+			const FString CandidateName = Candidate.Animation.IsValid() ? Candidate.Animation->GetName() : TEXT("");
+			const FString BestName = Best->Animation.IsValid() ? Best->Animation->GetName() : TEXT("");
+			if (CandidateName.Len() < BestName.Len())
+			{
+				Best = &Candidate;
+			}
 		}
 	}
 	return Best;

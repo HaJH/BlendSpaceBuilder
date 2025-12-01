@@ -31,6 +31,7 @@
 #include "LocomotionAnimClassifier.h"
 #include "BlendSpaceFactory.h"
 #include "UI/SBlendSpaceConfigDialog.h"
+#include "UI/SAxisRangeDialog.h"
 
 #define LOCTEXT_NAMESPACE "FBlendSpaceBuilderModule"
 
@@ -189,6 +190,13 @@ void FBlendSpaceBuilderModule::ExecuteGenerateLocomotionBlendSpace(TArray<FAsset
 
 void FBlendSpaceBuilderModule::CreateBlendSpaceUtilityMenu(FMenuBuilder& MenuBuilder, TArray<FAssetData> SelectedAssets)
 {
+	MenuBuilder.AddMenuEntry(
+		LOCTEXT("AdjustAxisRange", "Adjust Axis Range..."),
+		LOCTEXT("AdjustAxisRangeTooltip", "Adjust X/Y axis min/max range for selected BlendSpaces"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "ClassIcon.BlendSpace"),
+		FUIAction(FExecuteAction::CreateRaw(this, &FBlendSpaceBuilderModule::ExecuteAdjustAxisRange, SelectedAssets))
+	);
+
 	MenuBuilder.AddMenuEntry(
 		LOCTEXT("ApplyModifierToAllSamples", "Apply Modifier to All Samples"),
 		LOCTEXT("ApplyModifierToAllSamplesTooltip", "Apply an animation modifier to all sample animations in this BlendSpace"),
@@ -456,6 +464,109 @@ void FBlendSpaceBuilderModule::ExecuteOpenAllSamplesInEditor(TArray<FAssetData> 
 		FText::AsNumber(AllAnimations.Num())));
 	Info.ExpireDuration = 3.0f;
 	FSlateNotificationManager::Get().AddNotification(Info);
+}
+
+//=============================================================================
+// Adjust Axis Range
+//=============================================================================
+
+void FBlendSpaceBuilderModule::ExecuteAdjustAxisRange(TArray<FAssetData> SelectedAssets)
+{
+	// Collect all BlendSpaces
+	TArray<UBlendSpace*> BlendSpaces;
+	for (const FAssetData& Asset : SelectedAssets)
+	{
+		if (Asset.AssetClassPath == UBlendSpace::StaticClass()->GetClassPathName())
+		{
+			if (UBlendSpace* BlendSpace = Cast<UBlendSpace>(Asset.GetAsset()))
+			{
+				BlendSpaces.Add(BlendSpace);
+			}
+		}
+	}
+
+	if (BlendSpaces.IsEmpty())
+	{
+		return;
+	}
+
+	// Get initial values from first BlendSpace
+	float InitialXMin = -500.f;
+	float InitialXMax = 500.f;
+	float InitialYMin = -500.f;
+	float InitialYMax = 500.f;
+
+	UBlendSpace* FirstBlendSpace = BlendSpaces[0];
+	const FBlendParameter& XParam = FirstBlendSpace->GetBlendParameter(0);
+	const FBlendParameter& YParam = FirstBlendSpace->GetBlendParameter(1);
+
+	InitialXMin = XParam.Min;
+	InitialXMax = XParam.Max;
+	InitialYMin = YParam.Min;
+	InitialYMax = YParam.Max;
+
+	// Create and show dialog
+	TSharedRef<SWindow> Window = SNew(SWindow)
+		.Title(LOCTEXT("AdjustAxisRangeTitle", "Adjust Axis Range"))
+		.ClientSize(FVector2D(400, 150))
+		.SupportsMinimize(false)
+		.SupportsMaximize(false);
+
+	TSharedRef<SAxisRangeDialog> Dialog = SNew(SAxisRangeDialog)
+		.InitialXMin(InitialXMin)
+		.InitialXMax(InitialXMax)
+		.InitialYMin(InitialYMin)
+		.InitialYMax(InitialYMax)
+		.ParentWindow(Window);
+
+	Window->SetContent(Dialog);
+	GEditor->EditorAddModalWindow(Window);
+
+	if (Dialog->WasAccepted())
+	{
+		const float NewXMin = Dialog->GetXMin();
+		const float NewXMax = Dialog->GetXMax();
+		const float NewYMin = Dialog->GetYMin();
+		const float NewYMax = Dialog->GetYMax();
+
+		// Apply to all selected BlendSpaces
+		int32 ModifiedCount = 0;
+
+		for (UBlendSpace* BlendSpace : BlendSpaces)
+		{
+			// Access BlendParameters via reflection (protected member)
+			FProperty* BlendParametersProperty = UBlendSpace::StaticClass()->FindPropertyByName(TEXT("BlendParameters"));
+			if (!BlendParametersProperty)
+			{
+				continue;
+			}
+
+			FBlendParameter* BlendParameters = BlendParametersProperty->ContainerPtrToValuePtr<FBlendParameter>(BlendSpace);
+			if (!BlendParameters)
+			{
+				continue;
+			}
+
+			// Update X axis
+			BlendParameters[0].Min = NewXMin;
+			BlendParameters[0].Max = NewXMax;
+
+			// Update Y axis
+			BlendParameters[1].Min = NewYMin;
+			BlendParameters[1].Max = NewYMax;
+
+			// Mark package dirty
+			BlendSpace->MarkPackageDirty();
+			ModifiedCount++;
+		}
+
+		// Show notification
+		FNotificationInfo Notification(FText::Format(
+			LOCTEXT("AxisRangeAdjusted", "Adjusted axis range for {0} BlendSpace(s)"),
+			FText::AsNumber(ModifiedCount)));
+		Notification.ExpireDuration = 3.0f;
+		FSlateNotificationManager::Get().AddNotification(Notification);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

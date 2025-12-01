@@ -214,6 +214,33 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisSection()
 					.ToolTipText(LOCTEXT("StrideMultiplierTip", "Multiplier to compensate for stride underestimation (default: 1.4)"))
 				]
 			]
+			// Scale Divisor (for different skeleton scales)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.3f)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("ScaleDivisor", "Scale Divisor:"))
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.7f)
+				[
+					SNew(SSpinBox<float>)
+					.MinValue(0.001f)
+					.MaxValue(10000.0f)
+					.MinSliderValue(0.1f)
+					.MaxSliderValue(100.0f)
+					.Delta(0.1f)
+					.Value_Lambda([this]() { return ScaleDivisor; })
+					.OnValueChanged_Lambda([this](float NewValue) { ScaleDivisor = FMath::Max(0.001f, NewValue); })
+					.ToolTipText(LOCTEXT("ScaleDivisorTip", "Divide analysis results by this value to normalize skeleton scale (default: 1.0)"))
+				]
+			]
 			// Analyze Button
 			+ SVerticalBox::Slot()
 			.AutoHeight()
@@ -269,7 +296,7 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisResultsSection()
 				.Text(this, &SBlendSpaceConfigDialog::GetAxisRangeText)
 				.ColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.8f, 0.6f)))
 			]
-			// Use analyzed positions checkbox
+			// Use analyzed positions checkbox and Reset button
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(4, 8, 4, 0)
@@ -291,6 +318,18 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisResultsSection()
 					SNew(STextBlock)
 					.Text(LOCTEXT("UseAnalyzed", "Use analyzed positions"))
 					.ToolTipText(LOCTEXT("UseAnalyzedTip", "If unchecked, role-based default positions will be used instead"))
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.0f)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SButton)
+					.Text(LOCTEXT("ResetToRoleDefaults", "Reset to Role Defaults"))
+					.OnClicked(this, &SBlendSpaceConfigDialog::OnResetToRoleDefaultsClicked)
+					.IsEnabled_Lambda([this]() { return bAnalysisPerformed && AnalyzedMaxSpeed > KINDA_SMALL_NUMBER; })
+					.ToolTipText(LOCTEXT("ResetToRoleDefaultsTip", "Reset positions using max speed and role-based directions (Walk=40%, Run=80%, Sprint=100%)"))
 				]
 			]
 		];
@@ -628,6 +667,26 @@ FReply SBlendSpaceConfigDialog::OnAnalyzeClicked()
 		DetectedRightFootBone,
 		StrideMultiplier);
 
+	// Apply scale divisor to normalize skeleton scale
+	if (ScaleDivisor > KINDA_SMALL_NUMBER && ScaleDivisor != 1.0f)
+	{
+		for (auto& Pair : AnalyzedPositions)
+		{
+			Pair.Value /= ScaleDivisor;
+		}
+	}
+
+	// Calculate max speed from analyzed positions (for Reset to Role Defaults)
+	AnalyzedMaxSpeed = 0.f;
+	for (const auto& Pair : AnalyzedPositions)
+	{
+		float Speed = Pair.Value.Size2D();
+		if (Speed > AnalyzedMaxSpeed)
+		{
+			AnalyzedMaxSpeed = Speed;
+		}
+	}
+
 	// Calculate axis range with grid settings
 	FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
 		AnalyzedPositions,
@@ -643,6 +702,111 @@ FReply SBlendSpaceConfigDialog::OnAnalyzeClicked()
 
 	bAnalysisPerformed = true;
 	bUseAnalyzedPositions = true;
+
+	return FReply::Handled();
+}
+
+FReply SBlendSpaceConfigDialog::OnResetToRoleDefaultsClicked()
+{
+	if (AnalyzedMaxSpeed <= KINDA_SMALL_NUMBER)
+	{
+		return FReply::Handled();
+	}
+
+	// Speed ratios for each tier
+	const float WalkRatio = 0.4f;
+	const float RunRatio = 0.8f;
+	const float SprintRatio = 1.0f;
+
+	// Helper lambda to get speed ratio from role
+	auto GetSpeedRatioForRole = [&](ELocomotionRole Role) -> float
+	{
+		switch (Role)
+		{
+		case ELocomotionRole::Idle:
+			return 0.f;
+		case ELocomotionRole::WalkForward:
+		case ELocomotionRole::WalkBackward:
+		case ELocomotionRole::WalkLeft:
+		case ELocomotionRole::WalkRight:
+		case ELocomotionRole::WalkForwardLeft:
+		case ELocomotionRole::WalkForwardRight:
+		case ELocomotionRole::WalkBackwardLeft:
+		case ELocomotionRole::WalkBackwardRight:
+			return WalkRatio;
+		case ELocomotionRole::RunForward:
+		case ELocomotionRole::RunBackward:
+		case ELocomotionRole::RunLeft:
+		case ELocomotionRole::RunRight:
+		case ELocomotionRole::RunForwardLeft:
+		case ELocomotionRole::RunForwardRight:
+		case ELocomotionRole::RunBackwardLeft:
+		case ELocomotionRole::RunBackwardRight:
+			return RunRatio;
+		case ELocomotionRole::SprintForward:
+			return SprintRatio;
+		default:
+			return RunRatio;  // Default to run
+		}
+	};
+
+	// Helper lambda to get direction from role (same as GetRoleDirectionSign in BlendSpaceFactory.cpp)
+	auto GetDirectionForRole = [](ELocomotionRole Role) -> FVector2D
+	{
+		switch (Role)
+		{
+		case ELocomotionRole::Idle:
+			return FVector2D(0, 0);
+		case ELocomotionRole::WalkForward:
+		case ELocomotionRole::RunForward:
+		case ELocomotionRole::SprintForward:
+			return FVector2D(0, 1);
+		case ELocomotionRole::WalkBackward:
+		case ELocomotionRole::RunBackward:
+			return FVector2D(0, -1);
+		case ELocomotionRole::WalkLeft:
+		case ELocomotionRole::RunLeft:
+			return FVector2D(-1, 0);
+		case ELocomotionRole::WalkRight:
+		case ELocomotionRole::RunRight:
+			return FVector2D(1, 0);
+		case ELocomotionRole::WalkForwardLeft:
+		case ELocomotionRole::RunForwardLeft:
+			return FVector2D(-1, 1);
+		case ELocomotionRole::WalkForwardRight:
+		case ELocomotionRole::RunForwardRight:
+			return FVector2D(1, 1);
+		case ELocomotionRole::WalkBackwardLeft:
+		case ELocomotionRole::RunBackwardLeft:
+			return FVector2D(-1, -1);
+		case ELocomotionRole::WalkBackwardRight:
+		case ELocomotionRole::RunBackwardRight:
+			return FVector2D(1, -1);
+		default:
+			return FVector2D(0, 1);
+		}
+	};
+
+	// Reset positions based on role
+	for (const auto& Pair : SelectedAnimations)
+	{
+		ELocomotionRole Role = Pair.Key;
+		UAnimSequence* Anim = Pair.Value;
+		if (!Anim)
+		{
+			continue;
+		}
+
+		float SpeedRatio = GetSpeedRatioForRole(Role);
+		float Speed = AnalyzedMaxSpeed * SpeedRatio;
+		FVector2D Direction = GetDirectionForRole(Role);
+
+		FVector2D Position = Direction.GetSafeNormal() * Speed;
+		AnalyzedPositions.Add(Anim, FVector(Position.X, Position.Y, 0.f));
+	}
+
+	// Recalculate axis range
+	RecalculateAxisRange();
 
 	return FReply::Handled();
 }

@@ -76,7 +76,7 @@ public:
 		EBlendSpaceAnalysisType AnalysisType,
 		FName LeftFootBone = NAME_None,
 		FName RightFootBone = NAME_None,
-		float StrideMultiplier = 1.4f);
+		float StrideMultiplier = 1.0f);
 
 	/**
 	 * Calculate symmetric axis range from analyzed positions with padding.
