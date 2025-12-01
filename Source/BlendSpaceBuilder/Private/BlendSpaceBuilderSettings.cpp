@@ -17,6 +17,10 @@ UBlendSpaceBuilderSettings::UBlendSpaceBuilderSettings()
 	{
 		InitializeDefaultFootPatterns();
 	}
+	if (IgnorableSuffixes.Num() == 0)
+	{
+		InitializeDefaultIgnorableSuffixes();
+	}
 }
 
 void UBlendSpaceBuilderSettings::ResetToDefaultPatterns()
@@ -42,36 +46,64 @@ void UBlendSpaceBuilderSettings::InitializeDefaultPatterns()
 	PatternEntries.Add({TEXT("idle"), true, ELocomotionRole::Idle, FVector2D::ZeroVector, 100});
 
 	// ============== Walk Diagonal (Priority 95) ==============
-	// FL patterns - frontL45, FrontL45, _FL, F_L_45
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(frontL45|FrontL45|_FL$|_FL_|F_L_45)"), true, ELocomotionRole::WalkForwardLeft, FVector2D::ZeroVector, 95});
-	// FR patterns
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(frontR45|FrontR45|_FR$|_FR_|F_R_45)"), true, ELocomotionRole::WalkForwardRight, FVector2D::ZeroVector, 95});
-	// BL patterns
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(backL45|BackL45|_BL$|_BL_|B_L_45)"), true, ELocomotionRole::WalkBackwardLeft, FVector2D::ZeroVector, 95});
-	// BR patterns
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(backR45|BackR45|_BR$|_BR_|B_R_45)"), true, ELocomotionRole::WalkBackwardRight, FVector2D::ZeroVector, 95});
+	// ForwardLeft: frontL45, FrontL45, frontL, FrontL, FrontLeft, _FL, F_L_45, _F_L_
+	PatternEntries.Add({TEXT("walk.*(frontL|FrontL|FrontLeft|_FL$|_FL_|F_L_|_F_L_$)"), true, ELocomotionRole::WalkForwardLeft, FVector2D::ZeroVector, 95});
+	// ForwardRight: frontR45, FrontR45, frontR, FrontR, FrontRight, _FR, F_R_45, _F_R_
+	PatternEntries.Add({TEXT("walk.*(frontR|FrontR|FrontRight|_FR$|_FR_|F_R_|_F_R_$)"), true, ELocomotionRole::WalkForwardRight, FVector2D::ZeroVector, 95});
+	// BackwardLeft: backL45, BackL45, backL, BackL, BackLeft, _BL, B_L_45, _B_L_
+	PatternEntries.Add({TEXT("walk.*(backL|BackL|BackLeft|_BL$|_BL_|B_L_|_B_L_$)"), true, ELocomotionRole::WalkBackwardLeft, FVector2D::ZeroVector, 95});
+	// BackwardRight: backR45, BackR45, backR, BackR, BackRight, _BR, B_R_45, _B_R_
+	PatternEntries.Add({TEXT("walk.*(backR|BackR|BackRight|_BR$|_BR_|B_R_|_B_R_$)"), true, ELocomotionRole::WalkBackwardRight, FVector2D::ZeroVector, 95});
 
-	// ============== Walk Cardinal (Priority 90) ==============
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(front|forward|fwd|_F$|_F_|_0$)"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 90});
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(back|backward|backwards|_B$|_B_|_180$)"), true, ELocomotionRole::WalkBackward, FVector2D::ZeroVector, 90});
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(left|_L$|_L_|L_90)"), true, ELocomotionRole::WalkLeft, FVector2D::ZeroVector, 90});
-	PatternEntries.Add({TEXT("(walk|move.*walk|strafe.*walk).*(right|_R$|_R_|R_90)"), true, ELocomotionRole::WalkRight, FVector2D::ZeroVector, 90});
+	// ============== Walk Cardinal (Priority 90-92) ==============
+	// Left 90 - _L_90 becomes _L_ after suffix strip
+	PatternEntries.Add({TEXT("walk.*(_L_90|_F_L_90|_L_$)"), true, ELocomotionRole::WalkLeft, FVector2D::ZeroVector, 92});
+	// Right 90
+	PatternEntries.Add({TEXT("walk.*(_R_90|_F_R_90|_R_$)"), true, ELocomotionRole::WalkRight, FVector2D::ZeroVector, 92});
+	// Backward 180
+	PatternEntries.Add({TEXT("walk.*(_B_180|_B_$)"), true, ELocomotionRole::WalkBackward, FVector2D::ZeroVector, 92});
+	// Forward 0
+	PatternEntries.Add({TEXT("walk.*(_F_0|_F_$)"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 91});
+	// Standard cardinal patterns
+	PatternEntries.Add({TEXT("walk.*(forward|fwd|_F$)"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 90});
+	PatternEntries.Add({TEXT("walk.*(backward|backwards|_B$)"), true, ELocomotionRole::WalkBackward, FVector2D::ZeroVector, 90});
+	PatternEntries.Add({TEXT("walk.*(left|_L$)"), true, ELocomotionRole::WalkLeft, FVector2D::ZeroVector, 90});
+	PatternEntries.Add({TEXT("walk.*(right|_R$)"), true, ELocomotionRole::WalkRight, FVector2D::ZeroVector, 90});
+	// front/back alone (lower priority to avoid matching frontL, backR, etc.)
+	PatternEntries.Add({TEXT("walk.*front$"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 85});
+	PatternEntries.Add({TEXT("walk.*back$"), true, ELocomotionRole::WalkBackward, FVector2D::ZeroVector, 85});
 
 	// ============== Run Diagonal (Priority 95) ==============
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(frontL45|FrontL45|_FL$|_FL_|F_L_45)"), true, ELocomotionRole::RunForwardLeft, FVector2D::ZeroVector, 95});
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(frontR45|FrontR45|_FR$|_FR_|F_R_45)"), true, ELocomotionRole::RunForwardRight, FVector2D::ZeroVector, 95});
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(backL45|BackL45|_BL$|_BL_|B_L_45)"), true, ELocomotionRole::RunBackwardLeft, FVector2D::ZeroVector, 95});
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(backR45|BackR45|_BR$|_BR_|B_R_45)"), true, ELocomotionRole::RunBackwardRight, FVector2D::ZeroVector, 95});
+	// ForwardLeft: frontL45, FrontL45, frontL, FrontL, FrontLeft, _FL, F_L_45, _F_L_
+	PatternEntries.Add({TEXT("run.*(frontL|FrontL|FrontLeft|_FL$|_FL_|F_L_|_F_L_$)"), true, ELocomotionRole::RunForwardLeft, FVector2D::ZeroVector, 95});
+	// ForwardRight: frontR45, FrontR45, frontR, FrontR, FrontRight, _FR, F_R_45, _F_R_
+	PatternEntries.Add({TEXT("run.*(frontR|FrontR|FrontRight|_FR$|_FR_|F_R_|_F_R_$)"), true, ELocomotionRole::RunForwardRight, FVector2D::ZeroVector, 95});
+	// BackwardLeft: backL45, BackL45, backL, BackL, BackLeft, _BL, B_L_45, _B_L_
+	PatternEntries.Add({TEXT("run.*(backL|BackL|BackLeft|_BL$|_BL_|B_L_|_B_L_$)"), true, ELocomotionRole::RunBackwardLeft, FVector2D::ZeroVector, 95});
+	// BackwardRight: backR45, BackR45, backR, BackR, BackRight, _BR, B_R_45, _B_R_
+	PatternEntries.Add({TEXT("run.*(backR|BackR|BackRight|_BR$|_BR_|B_R_|_B_R_$)"), true, ELocomotionRole::RunBackwardRight, FVector2D::ZeroVector, 95});
 
-	// ============== Run Cardinal (Priority 90) ==============
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(front|forward|fwd|_F$|_F_|_0$)"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 90});
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(back|backward|backwards|_B$|_B_|_180$)"), true, ELocomotionRole::RunBackward, FVector2D::ZeroVector, 90});
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(left|_L$|_L_|L_90)"), true, ELocomotionRole::RunLeft, FVector2D::ZeroVector, 90});
-	PatternEntries.Add({TEXT("(run|move.*run|strafe.*run).*(right|_R$|_R_|R_90)"), true, ELocomotionRole::RunRight, FVector2D::ZeroVector, 90});
+	// ============== Run Cardinal (Priority 90-92) ==============
+	// Left 90 - _L_90 becomes _L_ after suffix strip
+	PatternEntries.Add({TEXT("run.*(_L_90|_F_L_90|_L_$)"), true, ELocomotionRole::RunLeft, FVector2D::ZeroVector, 92});
+	// Right 90
+	PatternEntries.Add({TEXT("run.*(_R_90|_F_R_90|_R_$)"), true, ELocomotionRole::RunRight, FVector2D::ZeroVector, 92});
+	// Backward 180
+	PatternEntries.Add({TEXT("run.*(_B_180|_B_$)"), true, ELocomotionRole::RunBackward, FVector2D::ZeroVector, 92});
+	// Forward 0
+	PatternEntries.Add({TEXT("run.*(_F_0|_F_$)"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 91});
+	// Standard cardinal patterns
+	PatternEntries.Add({TEXT("run.*(forward|fwd|_F$)"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 90});
+	PatternEntries.Add({TEXT("run.*(backward|backwards|_B$)"), true, ELocomotionRole::RunBackward, FVector2D::ZeroVector, 90});
+	PatternEntries.Add({TEXT("run.*(left|_L$)"), true, ELocomotionRole::RunLeft, FVector2D::ZeroVector, 90});
+	PatternEntries.Add({TEXT("run.*(right|_R$)"), true, ELocomotionRole::RunRight, FVector2D::ZeroVector, 90});
+	// front/back alone (lower priority to avoid matching frontL, backR, etc.)
+	PatternEntries.Add({TEXT("run.*front$"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 85});
+	PatternEntries.Add({TEXT("run.*back$"), true, ELocomotionRole::RunBackward, FVector2D::ZeroVector, 85});
 
-	// ============== Sprint (Priority 90) ==============
-	PatternEntries.Add({TEXT("sprint.*(front|forward|_F$)"), true, ELocomotionRole::SprintForward, FVector2D::ZeroVector, 90});
-	PatternEntries.Add({TEXT("sprint$"), true, ELocomotionRole::SprintForward, FVector2D::ZeroVector, 85});
+	// ============== Sprint (Priority 85-90) ==============
+	PatternEntries.Add({TEXT("sprint.*(forward|_F$)"), true, ELocomotionRole::SprintForward, FVector2D::ZeroVector, 90});
+	PatternEntries.Add({TEXT("sprint.*(front$|$)"), true, ELocomotionRole::SprintForward, FVector2D::ZeroVector, 85});
 
 	// ============== Strafe Independent (Priority 88) ==============
 	PatternEntries.Add({TEXT("StrafeL"), true, ELocomotionRole::WalkLeft, FVector2D::ZeroVector, 88});
@@ -80,7 +112,6 @@ void UBlendSpaceBuilderSettings::InitializeDefaultPatterns()
 	// ============== No Direction = Forward (Priority 50) ==============
 	PatternEntries.Add({TEXT("_walk$"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 50});
 	PatternEntries.Add({TEXT("_run$"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 50});
-	PatternEntries.Add({TEXT("RunFront$"), true, ELocomotionRole::RunForward, FVector2D::ZeroVector, 50});
 
 	// ============== Simple Anim_ Style (Priority 40) ==============
 	PatternEntries.Add({TEXT("Anim.*walk$"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 40});
@@ -89,6 +120,9 @@ void UBlendSpaceBuilderSettings::InitializeDefaultPatterns()
 
 bool UBlendSpaceBuilderSettings::TryMatchPattern(const FString& AnimName, ELocomotionRole& OutRole, FVector2D& OutPosition, int32& OutPriority) const
 {
+	// Strip ignorable suffixes before pattern matching
+	const FString NameForMatching = StripIgnorableSuffixes(AnimName);
+
 	TArray<FLocomotionPatternEntry> SortedPatterns = PatternEntries;
 	SortedPatterns.Sort([](const FLocomotionPatternEntry& A, const FLocomotionPatternEntry& B)
 	{
@@ -99,7 +133,7 @@ bool UBlendSpaceBuilderSettings::TryMatchPattern(const FString& AnimName, ELocom
 	{
 		FString Pattern = Entry.NamePattern;
 		FRegexPattern RegexPattern(Pattern, Entry.bCaseInsensitive ? ERegexPatternFlags::CaseInsensitive : ERegexPatternFlags::None);
-		FRegexMatcher Matcher(RegexPattern, AnimName);
+		FRegexMatcher Matcher(RegexPattern, NameForMatching);
 
 		if (Matcher.FindNext())
 		{
@@ -247,6 +281,14 @@ FName UBlendSpaceBuilderSettings::FindLeftFootBone(const USkeleton* Skeleton) co
 	{
 		FString BoneName = RefSkeleton.GetBoneName(BoneIndex).ToString();
 
+		// Skip IK bones - they don't have animation data
+		if (BoneName.Contains(TEXT("ik_"), ESearchCase::IgnoreCase) ||
+			BoneName.Contains(TEXT("_ik"), ESearchCase::IgnoreCase) ||
+			BoneName.StartsWith(TEXT("IK"), ESearchCase::CaseSensitive))
+		{
+			continue;
+		}
+
 		for (const FString& Pattern : LeftFootBonePatterns)
 		{
 			if (BoneName.Contains(Pattern, ESearchCase::IgnoreCase))
@@ -272,6 +314,14 @@ FName UBlendSpaceBuilderSettings::FindRightFootBone(const USkeleton* Skeleton) c
 	{
 		FString BoneName = RefSkeleton.GetBoneName(BoneIndex).ToString();
 
+		// Skip IK bones - they don't have animation data
+		if (BoneName.Contains(TEXT("ik_"), ESearchCase::IgnoreCase) ||
+			BoneName.Contains(TEXT("_ik"), ESearchCase::IgnoreCase) ||
+			BoneName.StartsWith(TEXT("IK"), ESearchCase::CaseSensitive))
+		{
+			continue;
+		}
+
 		for (const FString& Pattern : RightFootBonePatterns)
 		{
 			if (BoneName.Contains(Pattern, ESearchCase::IgnoreCase))
@@ -282,4 +332,64 @@ FName UBlendSpaceBuilderSettings::FindRightFootBone(const USkeleton* Skeleton) c
 	}
 
 	return NAME_None;
+}
+
+void UBlendSpaceBuilderSettings::InitializeDefaultIgnorableSuffixes()
+{
+	IgnorableSuffixes.Empty();
+	// Root Motion related
+	IgnorableSuffixes.Add(TEXT("_RootMotion"));
+	IgnorableSuffixes.Add(TEXT("_RM"));
+	// In Place related
+	IgnorableSuffixes.Add(TEXT("_InPlace"));
+	IgnorableSuffixes.Add(TEXT("_inplace"));
+	IgnorableSuffixes.Add(TEXT("_IP"));
+	// Other ignorable suffixes
+	IgnorableSuffixes.Add(TEXT("_NEW"));
+}
+
+void UBlendSpaceBuilderSettings::ResetToDefaultIgnorableSuffixes()
+{
+	InitializeDefaultIgnorableSuffixes();
+	SaveConfig();
+}
+
+FString UBlendSpaceBuilderSettings::StripIgnorableSuffixes(const FString& AnimName) const
+{
+	FString Result = AnimName;
+
+	// 1. Strip numeric suffixes first (_01, _02, _1, _2, 01, 02, etc.)
+	//    Regex: (_?\d+)$ - optional underscore + digits at the end
+	const FRegexPattern NumberPattern(TEXT("_?\\d+$"));
+	FRegexMatcher NumberMatcher(NumberPattern, Result);
+	if (NumberMatcher.FindNext())
+	{
+		const int32 MatchBegin = NumberMatcher.GetMatchBeginning();
+		Result = Result.Left(MatchBegin);
+	}
+
+	// 2. Sort suffixes by length (longer first, so _RootMotion is checked before _RM)
+	TArray<FString> SortedSuffixes = IgnorableSuffixes;
+	SortedSuffixes.Sort([](const FString& A, const FString& B)
+	{
+		return A.Len() > B.Len();
+	});
+
+	// 3. Strip suffixes (handle nested suffixes like _RM_Montage)
+	bool bFound = true;
+	while (bFound)
+	{
+		bFound = false;
+		for (const FString& Suffix : SortedSuffixes)
+		{
+			if (Result.EndsWith(Suffix, ESearchCase::IgnoreCase))
+			{
+				Result = Result.LeftChop(Suffix.Len());
+				bFound = true;
+				break;
+			}
+		}
+	}
+
+	return Result;
 }

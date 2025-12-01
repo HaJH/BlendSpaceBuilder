@@ -100,6 +100,10 @@ public:
 	FString OutputAssetSuffix = TEXT("_Locomotion");
 
 	// ============== Locomotion Analysis Settings ==============
+	/** Minimum velocity threshold for root motion analysis (cm/s). Animations below this are considered stationary. */
+	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Analysis", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float MinVelocityThreshold = 1.0f;
+
 	/** Left foot bone name patterns for locomotion analysis (case-insensitive contains match) */
 	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Analysis", meta = (TitleProperty = ""))
 	TArray<FString> LeftFootBonePatterns;
@@ -116,9 +120,16 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Patterns", meta = (TitleProperty = "NamePattern"))
 	TArray<FLocomotionPatternEntry> PatternEntries;
 
+	/** Suffixes to strip before pattern matching (e.g., _RM, _RootMotion, _IP, _InPlace) */
+	UPROPERTY(config, EditAnywhere, Category = "BlendSpace|Patterns", meta = (TitleProperty = ""))
+	TArray<FString> IgnorableSuffixes;
+
 	// ============== Functions ==============
 	UFUNCTION(CallInEditor, Category = "BlendSpace|Patterns")
 	void ResetToDefaultPatterns();
+
+	UFUNCTION(CallInEditor, Category = "BlendSpace|Patterns")
+	void ResetToDefaultIgnorableSuffixes();
 
 	UFUNCTION(CallInEditor, Category = "BlendSpace|Analysis")
 	void ResetToDefaultFootPatterns();
@@ -126,6 +137,9 @@ public:
 	bool TryMatchPattern(const FString& AnimName, ELocomotionRole& OutRole, FVector2D& OutPosition, int32& OutPriority) const;
 	FVector2D GetPositionForRole(ELocomotionRole Role) const;
 	float GetSpeedForTier(const FString& TierName) const;
+
+	/** Strip ignorable suffixes from animation name for pattern matching */
+	FString StripIgnorableSuffixes(const FString& AnimName) const;
 
 	/** Find left foot bone from skeleton using LeftFootBonePatterns */
 	FName FindLeftFootBone(const class USkeleton* Skeleton) const;
@@ -139,4 +153,5 @@ private:
 	void InitializeDefaultPatterns();
 	void InitializeDefaultSpeedTiers();
 	void InitializeDefaultFootPatterns();
+	void InitializeDefaultIgnorableSuffixes();
 };

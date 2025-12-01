@@ -173,7 +173,30 @@ bool FLocomotionAnimClassifier::HasRootMotion(const UAnimSequence* Anim) const
 	{
 		return false;
 	}
-	return Anim->bEnableRootMotion;
+
+	// First check if root motion is enabled
+	if (!Anim->bEnableRootMotion)
+	{
+		return false;
+	}
+
+	// Then verify there's actual root motion movement
+	const double PlayLength = Anim->GetPlayLength();
+	if (PlayLength <= KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	const FTransform RootMotion = Anim->ExtractRootMotionFromRange(0.0f, static_cast<float>(PlayLength));
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
+
+	const FVector Translation = RootMotion.GetTranslation();
+	const FVector Velocity = (Translation / PlayLength) * Anim->RateScale;
+	const float Speed2D = FVector2D(Velocity.X, Velocity.Y).Size();
+
+	const float MinVelocity = UBlendSpaceBuilderSettings::Get()->MinVelocityThreshold;
+	return Speed2D >= MinVelocity;
 }
 
 int32 FLocomotionAnimClassifier::GetClassifiedCount() const

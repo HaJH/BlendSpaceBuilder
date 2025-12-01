@@ -1,4 +1,5 @@
 #include "BlendSpaceFactory.h"
+#include "BlendSpaceBuilderSettings.h"
 
 #include "Animation/BlendSpace.h"
 #include "Animation/AnimSequence.h"
@@ -16,6 +17,8 @@
 #include "Subsystems/AssetEditorSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "BlendSpaceFactory"
+
+DEFINE_LOG_CATEGORY_STATIC(LogBlendSpaceBuilder, Log, All);
 
 //=============================================================================
 // Internal helper functions for analysis
@@ -87,12 +90,14 @@ namespace BlendSpaceAnalysisInternal
 	{
 		if (!Animation)
 		{
+			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("RootMotion: Animation is null"));
 			return FVector::ZeroVector;
 		}
 
 		double PlayLength = Animation->GetPlayLength();
 		if (PlayLength <= KINDA_SMALL_NUMBER)
 		{
+			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("RootMotion: '%s' has zero play length"), *Animation->GetName());
 			return FVector::ZeroVector;
 		}
 
@@ -106,9 +111,22 @@ namespace BlendSpaceAnalysisInternal
 		// Apply rate scale
 		Velocity *= Animation->RateScale;
 
-		// UE coordinate system: X=Forward, Y=Right, Z=Up
-		// BlendSpace axes: X=RightVelocity, Y=ForwardVelocity
-		return FVector(Velocity.Y, Velocity.X, 0.f);
+		// Check if velocity is below threshold (root motion enabled but no actual movement)
+		const float MinVelocity = UBlendSpaceBuilderSettings::Get()->MinVelocityThreshold;
+		const float Speed2D = FVector2D(Velocity.X, Velocity.Y).Size();
+		if (Speed2D < MinVelocity)
+		{
+			UE_LOG(LogBlendSpaceBuilder, Warning,
+				TEXT("RootMotion: '%s' velocity (%.2f) below threshold (%.2f)"),
+				*Animation->GetName(), Speed2D, MinVelocity);
+			return FVector::ZeroVector;
+		}
+
+		// ExtractRootMotionFromRange returns translation in character space
+		// BlendSpace axes: X=RightVelocity, Y=ForwardVelocity (matches directly)
+		UE_LOG(LogBlendSpaceBuilder, Verbose, TEXT("RootMotion: '%s' -> Velocity(%.1f, %.1f)"),
+			*Animation->GetName(), Velocity.X, Velocity.Y);
+		return FVector(Velocity.X, Velocity.Y, 0.f);
 	}
 
 	// Calculate locomotion velocity from a single foot bone
@@ -117,25 +135,32 @@ namespace BlendSpaceAnalysisInternal
 	{
 		if (!Animation || FootBoneName == NAME_None)
 		{
+			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: Invalid input (Anim=%s, Bone=%s)"),
+				Animation ? *Animation->GetName() : TEXT("null"), *FootBoneName.ToString());
 			return FVector::ZeroVector;
 		}
 
 		const int32 NumKeys = Animation->GetNumberOfSampledKeys();
 		if (NumKeys <= 1)
 		{
+			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' has insufficient keys (%d)"),
+				*Animation->GetName(), NumKeys);
 			return FVector::ZeroVector;
 		}
 
 		USkeleton* Skeleton = Animation->GetSkeleton();
 		if (!Skeleton)
 		{
+			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' has no skeleton"),
+				*Animation->GetName());
 			return FVector::ZeroVector;
 		}
 
 		int32 BoneIndex = Skeleton->GetReferenceSkeleton().FindBoneIndex(FootBoneName);
 		if (BoneIndex == INDEX_NONE)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("BlendSpaceFactory: Foot bone '%s' not found in skeleton"), *FootBoneName.ToString());
+			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' foot bone '%s' not found in skeleton"),
+				*Animation->GetName(), *FootBoneName.ToString());
 			return FVector::ZeroVector;
 		}
 
@@ -164,6 +189,8 @@ namespace BlendSpaceAnalysisInternal
 		// Handle case where foot doesn't move vertically
 		if (MaxHeight - MinHeight < KINDA_SMALL_NUMBER)
 		{
+			UE_LOG(LogBlendSpaceBuilder, Warning, TEXT("Locomotion: '%s' foot '%s' has no vertical movement (Height range: %.2f)"),
+				*Animation->GetName(), *FootBoneName.ToString(), MaxHeight - MinHeight);
 			return FVector::ZeroVector;
 		}
 
@@ -201,6 +228,8 @@ namespace BlendSpaceAnalysisInternal
 		// UE coordinates: X=Forward, Y=Right, Z=Up
 		// BlendSpace: X=Right, Y=Forward (2D only, Z must be 0)
 		// Note: Component space from GetBoneTransform uses Y=Forward, X=Right convention
+		UE_LOG(LogBlendSpaceBuilder, Verbose, TEXT("Locomotion: '%s' foot '%s' -> Velocity(%.1f, %.1f)"),
+			*Animation->GetName(), *FootBoneName.ToString(), CharacterVelocity.X, CharacterVelocity.Y);
 		return FVector(CharacterVelocity.X, CharacterVelocity.Y, 0.f);
 	}
 
@@ -355,9 +384,7 @@ void FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
 	float MaxAbsX = FMath::Max(FMath::Abs(OutMinX), FMath::Abs(OutMaxX));
 	float MaxAbsY = FMath::Max(FMath::Abs(OutMinY), FMath::Abs(OutMaxY));
 
-	// Apply 10% padding
-	MaxAbsX *= 1.1f;
-	MaxAbsY *= 1.1f;
+	// Grid step rounding provides natural padding, no explicit padding needed
 
 	// Grid divisions determines step count from center to edge (half the total range)
 	// For symmetric range: TotalRange = 2 * MaxAbs, divided into GridDivisions steps
