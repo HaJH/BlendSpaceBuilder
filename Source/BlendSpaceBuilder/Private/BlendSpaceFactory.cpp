@@ -575,19 +575,40 @@ void FBlendSpaceFactory::ConfigureAxes(UBlendSpace* BlendSpace, const FBlendSpac
 		return;
 	}
 
-	// X Axis (Horizontal - Right Velocity)
-	BlendParameters[0].DisplayName = Config.XAxisName;
-	BlendParameters[0].Min = Config.XAxisMin;
-	BlendParameters[0].Max = Config.XAxisMax;
-	BlendParameters[0].GridNum = Config.GridDivisions;
-	BlendParameters[0].bSnapToGrid = Config.bSnapToGrid;
+	if (Config.LocomotionType == EBlendSpaceLocomotionType::GaitBased)
+	{
+		// Gait-based axis configuration (fixed ranges)
+		// X Axis: Direction (-1 to 1)
+		BlendParameters[0].DisplayName = TEXT("Direction");
+		BlendParameters[0].Min = -1.f;
+		BlendParameters[0].Max = 1.f;
+		BlendParameters[0].GridNum = 2;
+		BlendParameters[0].bSnapToGrid = true;
 
-	// Y Axis (Vertical - Forward Velocity)
-	BlendParameters[1].DisplayName = Config.YAxisName;
-	BlendParameters[1].Min = Config.YAxisMin;
-	BlendParameters[1].Max = Config.YAxisMax;
-	BlendParameters[1].GridNum = Config.GridDivisions;
-	BlendParameters[1].bSnapToGrid = Config.bSnapToGrid;
+		// Y Axis: GaitIndex (-2 to 2)
+		BlendParameters[1].DisplayName = TEXT("GaitIndex");
+		BlendParameters[1].Min = -2.f;
+		BlendParameters[1].Max = 2.f;
+		BlendParameters[1].GridNum = 4;
+		BlendParameters[1].bSnapToGrid = true;
+	}
+	else
+	{
+		// Speed-based axis configuration (configurable ranges)
+		// X Axis (Horizontal - Right Velocity)
+		BlendParameters[0].DisplayName = Config.XAxisName;
+		BlendParameters[0].Min = Config.XAxisMin;
+		BlendParameters[0].Max = Config.XAxisMax;
+		BlendParameters[0].GridNum = Config.GridDivisions;
+		BlendParameters[0].bSnapToGrid = Config.bSnapToGrid;
+
+		// Y Axis (Vertical - Forward Velocity)
+		BlendParameters[1].DisplayName = Config.YAxisName;
+		BlendParameters[1].Min = Config.YAxisMin;
+		BlendParameters[1].Max = Config.YAxisMax;
+		BlendParameters[1].GridNum = Config.GridDivisions;
+		BlendParameters[1].bSnapToGrid = Config.bSnapToGrid;
+	}
 }
 
 void FBlendSpaceFactory::AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Animation, const FVector& Position)
@@ -639,6 +660,13 @@ void FBlendSpaceFactory::FinalizeAndSave(UBlendSpace* BlendSpace)
 
 FVector2D FBlendSpaceFactory::GetPositionForRole(ELocomotionRole Role, const FBlendSpaceBuildConfig& Config)
 {
+	// Gait-based mode uses fixed positions based on role
+	if (Config.LocomotionType == EBlendSpaceLocomotionType::GaitBased)
+	{
+		return GetPositionForRoleGait(Role);
+	}
+
+	// Speed-based mode uses velocity-based positions
 	float MaxSpeed = Config.YAxisMax;
 	float WalkSpeed = MaxSpeed * 0.4f;
 	float RunSpeed = MaxSpeed * 0.8f;
@@ -705,6 +733,59 @@ void FBlendSpaceFactory::OpenAssetInEditor(UBlendSpace* BlendSpace)
 	if (AssetEditorSubsystem)
 	{
 		AssetEditorSubsystem->OpenEditorForAsset(BlendSpace);
+	}
+}
+
+FVector2D FBlendSpaceFactory::GetPositionForRoleGait(ELocomotionRole Role)
+{
+	// Gait-based mapping: X=Direction (-1~1), Y=GaitIndex (-2~2)
+	// GaitIndex: RunBackward=-2, WalkBackward=-1, Idle=0, Walk=1, Run=2
+	// Direction: Left=-1, Center=0, Right=1
+
+	switch (Role)
+	{
+	case ELocomotionRole::Idle:
+		return FVector2D(0.f, 0.f);
+
+	// Walk (GaitIndex = 1)
+	case ELocomotionRole::WalkForward:
+		return FVector2D(0.f, 1.f);
+	case ELocomotionRole::WalkLeft:
+	case ELocomotionRole::WalkForwardLeft:
+		return FVector2D(-1.f, 1.f);
+	case ELocomotionRole::WalkRight:
+	case ELocomotionRole::WalkForwardRight:
+		return FVector2D(1.f, 1.f);
+
+	// WalkBackward (GaitIndex = -1)
+	case ELocomotionRole::WalkBackward:
+		return FVector2D(0.f, -1.f);
+	case ELocomotionRole::WalkBackwardLeft:
+		return FVector2D(-1.f, -1.f);
+	case ELocomotionRole::WalkBackwardRight:
+		return FVector2D(1.f, -1.f);
+
+	// Run (GaitIndex = 2)
+	case ELocomotionRole::RunForward:
+	case ELocomotionRole::SprintForward:
+		return FVector2D(0.f, 2.f);
+	case ELocomotionRole::RunLeft:
+	case ELocomotionRole::RunForwardLeft:
+		return FVector2D(-1.f, 2.f);
+	case ELocomotionRole::RunRight:
+	case ELocomotionRole::RunForwardRight:
+		return FVector2D(1.f, 2.f);
+
+	// RunBackward (GaitIndex = -2)
+	case ELocomotionRole::RunBackward:
+		return FVector2D(0.f, -2.f);
+	case ELocomotionRole::RunBackwardLeft:
+		return FVector2D(-1.f, -2.f);
+	case ELocomotionRole::RunBackwardRight:
+		return FVector2D(1.f, -2.f);
+
+	default:
+		return FVector2D::ZeroVector;
 	}
 }
 

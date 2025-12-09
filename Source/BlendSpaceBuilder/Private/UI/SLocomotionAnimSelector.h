@@ -27,8 +27,13 @@ private:
 	void OnSelectionChanged(TSharedPtr<FClassifiedAnimation> Item, ESelectInfo::Type SelectInfo);
 	FText GetCurrentSelectionText() const;
 
+	void OnUseSelectedAsset();
+	void OnBrowseToAsset();
+
 	ELocomotionRole Role;
 	TArray<TSharedPtr<FClassifiedAnimation>> CandidateItems;
 	TSharedPtr<FClassifiedAnimation> CurrentSelection;
 	FOnAnimationSelectedDelegate OnAnimationSelectedDelegate;
+
+	TSharedPtr<SComboBox<TSharedPtr<FClassifiedAnimation>>> ComboBox;
 };

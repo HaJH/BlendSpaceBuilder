@@ -84,6 +84,17 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				[
+					BuildLocomotionTypeSection()
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0, 8)
+				[
+					SNew(SSeparator)
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
 					BuildAnalysisSection()
 				]
 				+ SVerticalBox::Slot()
@@ -900,6 +911,7 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 {
 	FBlendSpaceBuildConfig Config;
 	Config.Skeleton = Skeleton;
+	Config.LocomotionType = SelectedLocomotionType;
 	Config.XAxisMin = XAxisMin;
 	Config.XAxisMax = XAxisMax;
 	Config.YAxisMin = YAxisMin;
@@ -918,8 +930,9 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 	Config.GridDivisions = GridDivisions;
 	Config.bSnapToGrid = bSnapToGrid;
 
-	// Set analysis results
-	Config.bApplyAnalysis = bAnalysisPerformed && bUseAnalyzedPositions;
+	// Set analysis results (only for Speed-based mode)
+	Config.bApplyAnalysis = bAnalysisPerformed && bUseAnalyzedPositions
+		&& SelectedLocomotionType == EBlendSpaceLocomotionType::SpeedBased;
 	if (Config.bApplyAnalysis)
 	{
 		Config.PreAnalyzedPositions = AnalyzedPositions;
@@ -1001,6 +1014,58 @@ FText SBlendSpaceConfigDialog::GetAxisRangeText() const
 bool SBlendSpaceConfigDialog::HasSelectedAnimations() const
 {
 	return SelectedAnimations.Num() > 0;
+}
+
+TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildLocomotionTypeSection()
+{
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0, 4)
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("LocomotionTypeHeader", "Locomotion Type"))
+			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0, 4)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0, 0, 8, 0)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("LocomotionTypeLabel", "Type"))
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			[
+				SNew(SSegmentedControl<EBlendSpaceLocomotionType>)
+				.Value(SelectedLocomotionType)
+				.OnValueChanged_Lambda([this](EBlendSpaceLocomotionType NewType)
+				{
+					SelectedLocomotionType = NewType;
+				})
+				+ SSegmentedControl<EBlendSpaceLocomotionType>::Slot(EBlendSpaceLocomotionType::SpeedBased)
+				.Text(LOCTEXT("SpeedBased", "Speed Based"))
+				.ToolTip(LOCTEXT("SpeedBasedTooltip", "X=RightVelocity, Y=ForwardVelocity (configurable ranges)"))
+				+ SSegmentedControl<EBlendSpaceLocomotionType>::Slot(EBlendSpaceLocomotionType::GaitBased)
+				.Text(LOCTEXT("GaitBased", "Gait Based"))
+				.ToolTip(LOCTEXT("GaitBasedTooltip", "X=Direction (-1~1), Y=GaitIndex (-2~2) (fixed ranges)"))
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0, 4)
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("LocomotionTypeHelp", "Gait Based: Uses fixed Direction/GaitIndex axes. Analysis not required."))
+			.Font(FCoreStyle::GetDefaultFontStyle("Italic", 8))
+			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+		];
 }
 
 #undef LOCTEXT_NAMESPACE

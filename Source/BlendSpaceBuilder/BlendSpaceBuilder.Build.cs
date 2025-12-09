@@ -34,6 +34,7 @@ public class BlendSpaceBuilder : ModuleRules
 				"AnimationBlueprintLibrary",
 				"AnimationEditor",
 				"ClassViewer",
+				"PropertyEditor",
 			}
 		);
 	}

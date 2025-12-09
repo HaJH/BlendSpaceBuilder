@@ -53,6 +53,9 @@ private:
 	TMap<ELocomotionRole, UAnimSequence*> SelectedAnimations;
 	bool bWasAccepted = false;
 
+	// Locomotion type selection (Speed-based or Gait-based)
+	EBlendSpaceLocomotionType SelectedLocomotionType = EBlendSpaceLocomotionType::SpeedBased;
+
 	// Analysis type selection
 	EBlendSpaceAnalysisType SelectedAnalysisType = EBlendSpaceAnalysisType::RootMotion;
 
@@ -75,6 +78,7 @@ private:
 	float AnalyzedYMax = 500.f;
 
 	// UI builders
+	TSharedRef<SWidget> BuildLocomotionTypeSection();
 	TSharedRef<SWidget> BuildAnalysisSection();
 	TSharedRef<SWidget> BuildAnalysisResultsSection();
 	TSharedRef<SWidget> BuildGridConfigSection();

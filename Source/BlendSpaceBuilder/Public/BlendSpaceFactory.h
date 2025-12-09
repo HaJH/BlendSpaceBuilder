@@ -18,9 +18,21 @@ enum class EBlendSpaceAnalysisType : uint8
 	LocomotionStride,
 };
 
+/** Locomotion type for BlendSpace generation */
+enum class EBlendSpaceLocomotionType : uint8
+{
+	/** Speed based: X=RightVelocity, Y=ForwardVelocity */
+	SpeedBased,
+	/** Gait based: X=Direction (-1~1), Y=GaitIndex (-2~2) */
+	GaitBased,
+};
+
 struct FBlendSpaceBuildConfig
 {
 	USkeleton* Skeleton = nullptr;
+
+	/** Locomotion type: SpeedBased (velocity) or GaitBased (direction + gait index) */
+	EBlendSpaceLocomotionType LocomotionType = EBlendSpaceLocomotionType::SpeedBased;
 
 	float XAxisMin = -500.f;
 	float XAxisMax = 500.f;
@@ -95,6 +107,9 @@ private:
 	static void AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSequence* Animation, const FVector& Position);
 	static void FinalizeAndSave(UBlendSpace* BlendSpace);
 	static FVector2D GetPositionForRole(ELocomotionRole Role, const FBlendSpaceBuildConfig& Config);
+
+	/** Get Gait-based position for a locomotion role */
+	static FVector2D GetPositionForRoleGait(ELocomotionRole Role);
 
 	/** Open the BlendSpace asset in editor */
 	static void OpenAssetInEditor(UBlendSpace* BlendSpace);

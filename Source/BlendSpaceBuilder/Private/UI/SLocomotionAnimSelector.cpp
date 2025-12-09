@@ -3,6 +3,10 @@
 #include "Animation/AnimSequence.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/SBoxPanel.h"
+#include "ContentBrowserModule.h"
+#include "IContentBrowserSingleton.h"
+#include "PropertyCustomizationHelpers.h"
+#include "Editor.h"
 
 #define LOCTEXT_NAMESPACE "SLocomotionAnimSelector"
 
@@ -31,15 +35,44 @@ void SLocomotionAnimSelector::Construct(const FArguments& InArgs)
 
 	ChildSlot
 	[
-		SNew(SComboBox<TSharedPtr<FClassifiedAnimation>>)
-		.OptionsSource(&CandidateItems)
-		.InitiallySelectedItem(CurrentSelection)
-		.OnGenerateWidget(this, &SLocomotionAnimSelector::GenerateComboBoxItem)
-		.OnSelectionChanged(this, &SLocomotionAnimSelector::OnSelectionChanged)
-		.Content()
+		SNew(SHorizontalBox)
+
+		// ComboBox
+		+ SHorizontalBox::Slot()
+		.FillWidth(1.0f)
 		[
-			SNew(STextBlock)
-			.Text(this, &SLocomotionAnimSelector::GetCurrentSelectionText)
+			SAssignNew(ComboBox, SComboBox<TSharedPtr<FClassifiedAnimation>>)
+			.OptionsSource(&CandidateItems)
+			.InitiallySelectedItem(CurrentSelection)
+			.OnGenerateWidget(this, &SLocomotionAnimSelector::GenerateComboBoxItem)
+			.OnSelectionChanged(this, &SLocomotionAnimSelector::OnSelectionChanged)
+			.Content()
+			[
+				SNew(STextBlock)
+				.Text(this, &SLocomotionAnimSelector::GetCurrentSelectionText)
+			]
+		]
+
+		// Use Selected Asset button
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(2, 0, 0, 0)
+		.VAlign(VAlign_Center)
+		[
+			PropertyCustomizationHelpers::MakeUseSelectedButton(
+				FSimpleDelegate::CreateSP(this, &SLocomotionAnimSelector::OnUseSelectedAsset),
+				LOCTEXT("UseSelectedAssetTooltip", "Use the AnimSequence selected in Content Browser"))
+		]
+
+		// Browse to Asset button
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(2, 0, 0, 0)
+		.VAlign(VAlign_Center)
+		[
+			PropertyCustomizationHelpers::MakeBrowseButton(
+				FSimpleDelegate::CreateSP(this, &SLocomotionAnimSelector::OnBrowseToAsset),
+				LOCTEXT("BrowseToAssetTooltip", "Browse to this animation in Content Browser"))
 		]
 	];
 }
@@ -101,6 +134,40 @@ FText SLocomotionAnimSelector::GetCurrentSelectionText() const
 	}
 
 	return FText::FromString(CurrentSelection->GetDisplayName());
+}
+
+void SLocomotionAnimSelector::OnUseSelectedAsset()
+{
+	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+	TArray<FAssetData> SelectedAssets;
+	ContentBrowserModule.Get().GetSelectedAssets(SelectedAssets);
+
+	for (const FAssetData& AssetData : SelectedAssets)
+	{
+		if (UAnimSequence* Anim = Cast<UAnimSequence>(AssetData.GetAsset()))
+		{
+			// Find this animation in CandidateItems
+			for (const TSharedPtr<FClassifiedAnimation>& Item : CandidateItems)
+			{
+				if (Item.IsValid() && Item->Animation.Get() == Anim)
+				{
+					ComboBox->SetSelectedItem(Item);
+					OnSelectionChanged(Item, ESelectInfo::Direct);
+					return;
+				}
+			}
+		}
+	}
+}
+
+void SLocomotionAnimSelector::OnBrowseToAsset()
+{
+	if (CurrentSelection.IsValid() && CurrentSelection->Animation.IsValid())
+	{
+		TArray<UObject*> Objects;
+		Objects.Add(CurrentSelection->Animation.Get());
+		GEditor->SyncBrowserToObjects(Objects);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE
