@@ -466,6 +466,30 @@ TMap<UAnimSequence*, FVector> FBlendSpaceFactory::AnalyzeSamplePositions(
 	return Result;
 }
 
+FVector FBlendSpaceFactory::AnalyzeAnimationVelocity(
+	UAnimSequence* Animation,
+	EBlendSpaceAnalysisType AnalysisType,
+	FName LeftFootBone,
+	FName RightFootBone)
+{
+	if (!Animation)
+	{
+		return FVector::ZeroVector;
+	}
+
+	switch (AnalysisType)
+	{
+	case EBlendSpaceAnalysisType::RootMotion:
+		return BlendSpaceAnalysisInternal::CalculateRootMotionVelocity(Animation);
+	case EBlendSpaceAnalysisType::LocomotionSimple:
+		return BlendSpaceAnalysisInternal::CalculateLocomotionVelocitySimple(Animation, LeftFootBone, RightFootBone);
+	case EBlendSpaceAnalysisType::LocomotionStride:
+		return BlendSpaceAnalysisInternal::CalculateLocomotionVelocityStride(Animation, LeftFootBone, RightFootBone);
+	default:
+		return FVector::ZeroVector;
+	}
+}
+
 void FBlendSpaceFactory::CalculateAxisRangeFromAnalysis(
 	const TMap<UAnimSequence*, FVector>& AnalyzedPositions,
 	int32 GridDivisions,

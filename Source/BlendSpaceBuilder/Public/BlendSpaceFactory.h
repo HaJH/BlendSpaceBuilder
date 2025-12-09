@@ -101,6 +101,20 @@ public:
 		bool bUseNiceNumbers,
 		float& OutMinX, float& OutMaxX, float& OutMinY, float& OutMaxY);
 
+	/**
+	 * Analyze a single animation's velocity.
+	 * @param Animation The animation to analyze
+	 * @param AnalysisType Analysis method to use
+	 * @param LeftFootBone Left foot bone name (required for Locomotion analysis)
+	 * @param RightFootBone Right foot bone name (required for Locomotion analysis)
+	 * @return Velocity vector (X=Right, Y=Forward, Z=0)
+	 */
+	static FVector AnalyzeAnimationVelocity(
+		UAnimSequence* Animation,
+		EBlendSpaceAnalysisType AnalysisType,
+		FName LeftFootBone = NAME_None,
+		FName RightFootBone = NAME_None);
+
 private:
 	static UBlendSpace* CreateBlendSpaceAsset(const FString& PackagePath, const FString& AssetName, USkeleton* Skeleton);
 	static void ConfigureAxes(UBlendSpace* BlendSpace, const FBlendSpaceBuildConfig& Config);
