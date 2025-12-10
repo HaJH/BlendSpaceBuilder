@@ -63,6 +63,11 @@ private:
 	FName DetectedLeftFootBone = NAME_None;
 	FName DetectedRightFootBone = NAME_None;
 
+	// Custom foot bone override
+	bool bUseCustomFootBones = false;
+	FName CustomLeftFootBone = NAME_None;
+	FName CustomRightFootBone = NAME_None;
+
 	// Analysis results (populated by Analyze button)
 	TMap<UAnimSequence*, FVector> AnalyzedPositions;
 	bool bAnalysisPerformed = false;

@@ -57,6 +57,10 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 	{
 		DetectedLeftFootBone = Settings->FindLeftFootBone(Skeleton);
 		DetectedRightFootBone = Settings->FindRightFootBone(Skeleton);
+
+		// Initialize custom foot bones with detected values
+		CustomLeftFootBone = DetectedLeftFootBone;
+		CustomRightFootBone = DetectedRightFootBone;
 	}
 
 	ChildSlot
@@ -193,6 +197,78 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnalysisSection()
 				.Visibility(this, &SBlendSpaceConfigDialog::GetFootBoneVisibility)
 				.Text(this, &SBlendSpaceConfigDialog::GetFootBoneText)
 				.ColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f)))
+			]
+			// Use Custom Foot Bones checkbox
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				.Visibility(this, &SBlendSpaceConfigDialog::GetFootBoneVisibility)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SCheckBox)
+					.IsChecked_Lambda([this]() { return bUseCustomFootBones ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+					.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState) {
+						bUseCustomFootBones = (NewState == ECheckBoxState::Checked);
+					})
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(4, 0, 0, 0)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("UseCustomFootBones", "Use Custom Foot Bones"))
+				]
+			]
+			// Custom Foot Bone input fields (shown when checkbox is checked)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				SNew(SHorizontalBox)
+				.Visibility_Lambda([this]() {
+					return (bUseCustomFootBones && GetFootBoneVisibility() == EVisibility::Visible)
+						? EVisibility::Visible : EVisibility::Collapsed;
+				})
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.15f)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("LeftFootLabel", "Left:"))
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.35f)
+				.Padding(4, 0)
+				[
+					SNew(SEditableTextBox)
+					.Text_Lambda([this]() { return FText::FromName(CustomLeftFootBone); })
+					.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type) {
+						CustomLeftFootBone = FName(*Text.ToString());
+					})
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.15f)
+				.VAlign(VAlign_Center)
+				.Padding(8, 0, 0, 0)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("RightFootLabel", "Right:"))
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.35f)
+				.Padding(4, 0)
+				[
+					SNew(SEditableTextBox)
+					.Text_Lambda([this]() { return FText::FromName(CustomRightFootBone); })
+					.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type) {
+						CustomRightFootBone = FName(*Text.ToString());
+					})
+				]
 			]
 			// Stride Multiplier (only shown when Stride is selected)
 			+ SVerticalBox::Slot()
@@ -670,12 +746,16 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildButtonSection()
 
 FReply SBlendSpaceConfigDialog::OnAnalyzeClicked()
 {
+	// Determine which foot bones to use
+	FName LeftBoneToUse = bUseCustomFootBones ? CustomLeftFootBone : DetectedLeftFootBone;
+	FName RightBoneToUse = bUseCustomFootBones ? CustomRightFootBone : DetectedRightFootBone;
+
 	// Run analysis
 	AnalyzedPositions = FBlendSpaceFactory::AnalyzeSamplePositions(
 		SelectedAnimations,
 		SelectedAnalysisType,
-		DetectedLeftFootBone,
-		DetectedRightFootBone,
+		LeftBoneToUse,
+		RightBoneToUse,
 		StrideMultiplier);
 
 	// Apply scale divisor to normalize skeleton scale
@@ -922,8 +1002,8 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 	Config.AssetName = OutputAssetName;
 	Config.SelectedAnimations = SelectedAnimations;
 	Config.AnalysisType = SelectedAnalysisType;
-	Config.LeftFootBoneName = DetectedLeftFootBone;
-	Config.RightFootBoneName = DetectedRightFootBone;
+	Config.LeftFootBoneName = bUseCustomFootBones ? CustomLeftFootBone : DetectedLeftFootBone;
+	Config.RightFootBoneName = bUseCustomFootBones ? CustomRightFootBone : DetectedRightFootBone;
 	Config.bOpenInEditor = true;
 
 	// Grid settings
