@@ -6,7 +6,9 @@
 #include "BlendSpaceBuilderSettings.h"
 
 class UAnimSequence;
+class USkeleton;
 struct FClassifiedAnimation;
+struct FAssetData;
 
 DECLARE_DELEGATE_OneParam(FOnAnimationSelectedDelegate, UAnimSequence*);
 
@@ -17,6 +19,7 @@ public:
 		SLATE_ARGUMENT(ELocomotionRole, Role)
 		SLATE_ARGUMENT(TArray<TSharedPtr<FClassifiedAnimation>>, CandidateItems)
 		SLATE_ARGUMENT(TSharedPtr<FClassifiedAnimation>, InitialSelection)
+		SLATE_ARGUMENT(USkeleton*, TargetSkeleton)
 		SLATE_EVENT(FOnAnimationSelectedDelegate, OnAnimationSelected)
 	SLATE_END_ARGS()
 
@@ -29,6 +32,10 @@ private:
 
 	void OnUseSelectedAsset();
 	void OnBrowseToAsset();
+	FReply OnPickAsset();
+	void OnManualAssetPicked(const FAssetData& AssetData);
+	bool ValidateSkeletonMatch(UAnimSequence* Anim) const;
+	TSharedPtr<FClassifiedAnimation> CreateManualItem(UAnimSequence* Anim);
 
 	ELocomotionRole Role;
 	TArray<TSharedPtr<FClassifiedAnimation>> CandidateItems;
@@ -36,4 +43,5 @@ private:
 	FOnAnimationSelectedDelegate OnAnimationSelectedDelegate;
 
 	TSharedPtr<SComboBox<TSharedPtr<FClassifiedAnimation>>> ComboBox;
+	USkeleton* TargetSkeleton = nullptr;
 };

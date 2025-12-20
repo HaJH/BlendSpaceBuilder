@@ -1,12 +1,16 @@
 #include "SLocomotionAnimSelector.h"
 #include "LocomotionAnimClassifier.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 #include "Widgets/Input/SComboBox.h"
+#include "Widgets/Input/SButton.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/SWindow.h"
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "PropertyCustomizationHelpers.h"
 #include "Editor.h"
+#include "Misc/MessageDialog.h"
 
 #define LOCTEXT_NAMESPACE "SLocomotionAnimSelector"
 
@@ -16,6 +20,7 @@ void SLocomotionAnimSelector::Construct(const FArguments& InArgs)
 	CandidateItems = InArgs._CandidateItems;
 	CurrentSelection = InArgs._InitialSelection;
 	OnAnimationSelectedDelegate = InArgs._OnAnimationSelected;
+	TargetSkeleton = InArgs._TargetSkeleton;
 
 	// Add a "None" option
 	TSharedPtr<FClassifiedAnimation> NoneOption = MakeShared<FClassifiedAnimation>();
@@ -74,6 +79,18 @@ void SLocomotionAnimSelector::Construct(const FArguments& InArgs)
 				FSimpleDelegate::CreateSP(this, &SLocomotionAnimSelector::OnBrowseToAsset),
 				LOCTEXT("BrowseToAssetTooltip", "Browse to this animation in Content Browser"))
 		]
+
+		// Pick Asset button
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(2, 0, 0, 0)
+		.VAlign(VAlign_Center)
+		[
+			SNew(SButton)
+			.Text(LOCTEXT("PickAsset", "Pick..."))
+			.ToolTipText(LOCTEXT("PickAssetTooltip", "Open asset picker to manually select an animation"))
+			.OnClicked(this, &SLocomotionAnimSelector::OnPickAsset)
+		]
 	];
 }
 
@@ -86,8 +103,22 @@ TSharedRef<SWidget> SLocomotionAnimSelector::GenerateComboBoxItem(TSharedPtr<FCl
 			.ColorAndOpacity(FSlateColor::UseSubduedForeground());
 	}
 
-	// Build row with [RM] indicator for root motion animations
+	const bool bIsManual = (Item->MatchPriority == -1);
+
+	// Build row with [Manual] and [RM] indicators
 	return SNew(SHorizontalBox)
+		// [Manual] indicator for manually selected animations
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(0, 0, 4, 0)
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("Manual", "[Manual]"))
+			.ColorAndOpacity(FLinearColor::Yellow)
+			.ToolTipText(LOCTEXT("ManuallySelected", "Manually Selected Animation"))
+			.Visibility(bIsManual ? EVisibility::Visible : EVisibility::Collapsed)
+		]
+		// [RM] indicator for root motion animations
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.Padding(0, 0, 4, 0)
@@ -126,14 +157,23 @@ FText SLocomotionAnimSelector::GetCurrentSelectionText() const
 		return LOCTEXT("NoneSelected", "(None)");
 	}
 
-	// Include [RM] indicator in selected text
-	if (CurrentSelection->bHasRootMotion)
+	const bool bIsManual = (CurrentSelection->MatchPriority == -1);
+	FString DisplayText;
+
+	// Include [Manual] indicator for manually selected animations
+	if (bIsManual)
 	{
-		return FText::Format(LOCTEXT("SelectedWithRM", "[RM] {0}"),
-			FText::FromString(CurrentSelection->GetDisplayName()));
+		DisplayText += TEXT("[Manual] ");
 	}
 
-	return FText::FromString(CurrentSelection->GetDisplayName());
+	// Include [RM] indicator for root motion animations
+	if (CurrentSelection->bHasRootMotion)
+	{
+		DisplayText += TEXT("[RM] ");
+	}
+
+	DisplayText += CurrentSelection->GetDisplayName();
+	return FText::FromString(DisplayText);
 }
 
 void SLocomotionAnimSelector::OnUseSelectedAsset()
@@ -146,6 +186,12 @@ void SLocomotionAnimSelector::OnUseSelectedAsset()
 	{
 		if (UAnimSequence* Anim = Cast<UAnimSequence>(AssetData.GetAsset()))
 		{
+			// Validate skeleton match
+			if (!ValidateSkeletonMatch(Anim))
+			{
+				continue;
+			}
+
 			// Find this animation in CandidateItems
 			for (const TSharedPtr<FClassifiedAnimation>& Item : CandidateItems)
 			{
@@ -156,6 +202,14 @@ void SLocomotionAnimSelector::OnUseSelectedAsset()
 					return;
 				}
 			}
+
+			// Not found in candidates - add as manual selection
+			TSharedPtr<FClassifiedAnimation> NewItem = CreateManualItem(Anim);
+			CandidateItems.Add(NewItem);
+			ComboBox->RefreshOptions();
+			ComboBox->SetSelectedItem(NewItem);
+			OnSelectionChanged(NewItem, ESelectInfo::Direct);
+			return;
 		}
 	}
 }
@@ -168,6 +222,116 @@ void SLocomotionAnimSelector::OnBrowseToAsset()
 		Objects.Add(CurrentSelection->Animation.Get());
 		GEditor->SyncBrowserToObjects(Objects);
 	}
+}
+
+FReply SLocomotionAnimSelector::OnPickAsset()
+{
+	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+
+	FAssetPickerConfig AssetPickerConfig;
+	AssetPickerConfig.SelectionMode = ESelectionMode::Single;
+	AssetPickerConfig.InitialAssetViewType = EAssetViewType::List;
+	AssetPickerConfig.bFocusSearchBoxWhenOpened = true;
+	AssetPickerConfig.bAllowNullSelection = false;
+	AssetPickerConfig.bShowBottomToolbar = true;
+	AssetPickerConfig.bAutohideSearchBar = false;
+	AssetPickerConfig.bCanShowClasses = false;
+
+	// Filter: AnimSequence only
+	AssetPickerConfig.Filter.ClassPaths.Add(UAnimSequence::StaticClass()->GetClassPathName());
+	AssetPickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &SLocomotionAnimSelector::OnManualAssetPicked);
+
+	// Create asset picker widget
+	TSharedRef<SWidget> AssetPickerWidget = ContentBrowserModule.Get().CreateAssetPicker(AssetPickerConfig);
+
+	// Create modal window
+	TSharedRef<SWindow> PickerWindow = SNew(SWindow)
+		.Title(LOCTEXT("PickAnimation", "Pick Animation"))
+		.ClientSize(FVector2D(800, 600))
+		.SupportsMaximize(false)
+		.SupportsMinimize(false)
+		[
+			SNew(SBorder)
+			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+			[
+				AssetPickerWidget
+			]
+		];
+
+	GEditor->EditorAddModalWindow(PickerWindow);
+
+	return FReply::Handled();
+}
+
+void SLocomotionAnimSelector::OnManualAssetPicked(const FAssetData& AssetData)
+{
+	UAnimSequence* PickedAnim = Cast<UAnimSequence>(AssetData.GetAsset());
+	if (!PickedAnim)
+	{
+		return;
+	}
+
+	// Validate skeleton match
+	if (!ValidateSkeletonMatch(PickedAnim))
+	{
+		FText ErrorTitle = LOCTEXT("SkeletonMismatch", "Skeleton Mismatch");
+		FText ErrorMessage = LOCTEXT("SkeletonMismatchMsg",
+			"Selected animation does not match the target skeleton.");
+		FMessageDialog::Open(EAppMsgType::Ok, ErrorMessage, ErrorTitle);
+		return;
+	}
+
+	// Check if already in candidates
+	for (const TSharedPtr<FClassifiedAnimation>& Item : CandidateItems)
+	{
+		if (Item.IsValid() && Item->Animation.Get() == PickedAnim)
+		{
+			ComboBox->SetSelectedItem(Item);
+			OnSelectionChanged(Item, ESelectInfo::Direct);
+
+			// Close picker window
+			TSharedPtr<SWindow> ParentWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
+			if (ParentWindow.IsValid())
+			{
+				FSlateApplication::Get().RequestDestroyWindow(ParentWindow.ToSharedRef());
+			}
+			return;
+		}
+	}
+
+	// Create new manual item
+	TSharedPtr<FClassifiedAnimation> NewItem = CreateManualItem(PickedAnim);
+	CandidateItems.Add(NewItem);
+	ComboBox->RefreshOptions();
+	ComboBox->SetSelectedItem(NewItem);
+	OnSelectionChanged(NewItem, ESelectInfo::Direct);
+
+	// Close picker window
+	TSharedPtr<SWindow> ParentWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
+	if (ParentWindow.IsValid())
+	{
+		FSlateApplication::Get().RequestDestroyWindow(ParentWindow.ToSharedRef());
+	}
+}
+
+bool SLocomotionAnimSelector::ValidateSkeletonMatch(UAnimSequence* Anim) const
+{
+	if (!Anim || !TargetSkeleton)
+	{
+		return true; // Allow if no skeleton to validate against
+	}
+
+	return Anim->GetSkeleton() == TargetSkeleton;
+}
+
+TSharedPtr<FClassifiedAnimation> SLocomotionAnimSelector::CreateManualItem(UAnimSequence* Anim)
+{
+	TSharedPtr<FClassifiedAnimation> Item = MakeShared<FClassifiedAnimation>();
+	Item->Animation = Anim;
+	Item->Role = Role;
+	Item->bHasRootMotion = Anim->bEnableRootMotion;
+	Item->MatchPriority = -1; // Mark as manual selection
+	return Item;
 }
 
 #undef LOCTEXT_NAMESPACE

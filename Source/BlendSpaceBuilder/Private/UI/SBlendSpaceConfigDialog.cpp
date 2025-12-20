@@ -576,21 +576,52 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnimationSelectionSection()
 {
 	TSharedRef<SVerticalBox> AnimationList = SNew(SVerticalBox);
 
-	if (Classifier)
+	// Define all locomotion roles to show (excluding Custom)
+	static const TArray<ELocomotionRole> AllRoles = {
+		ELocomotionRole::Idle,
+		ELocomotionRole::WalkForward,
+		ELocomotionRole::WalkBackward,
+		ELocomotionRole::WalkLeft,
+		ELocomotionRole::WalkRight,
+		ELocomotionRole::WalkForwardLeft,
+		ELocomotionRole::WalkForwardRight,
+		ELocomotionRole::WalkBackwardLeft,
+		ELocomotionRole::WalkBackwardRight,
+		ELocomotionRole::RunForward,
+		ELocomotionRole::RunBackward,
+		ELocomotionRole::RunLeft,
+		ELocomotionRole::RunRight,
+		ELocomotionRole::RunForwardLeft,
+		ELocomotionRole::RunForwardRight,
+		ELocomotionRole::RunBackwardLeft,
+		ELocomotionRole::RunBackwardRight,
+		ELocomotionRole::SprintForward,
+	};
+
+	// Show all roles, with or without candidates
+	for (ELocomotionRole Role : AllRoles)
 	{
-		// Show classified animations
-		for (auto& Pair : Classifier->GetClassifiedResults())
+		FLocomotionRoleCandidates* Candidates = nullptr;
+		if (Classifier)
 		{
-			FLocomotionRoleCandidates& Candidates = const_cast<FLocomotionRoleCandidates&>(Pair.Value);
-			AnimationList->AddSlot()
-				.AutoHeight()
-				.Padding(4)
-				[
-					BuildRoleRow(Pair.Key, &Candidates)
-				];
+			auto& Results = Classifier->GetClassifiedResults();
+			if (auto* Found = Results.Find(Role))
+			{
+				Candidates = const_cast<FLocomotionRoleCandidates*>(Found);
+			}
 		}
 
-		// Show statistics
+		AnimationList->AddSlot()
+			.AutoHeight()
+			.Padding(4)
+			[
+				BuildRoleRow(Role, Candidates)
+			];
+	}
+
+	// Show statistics
+	if (Classifier)
+	{
 		int32 Total = Classifier->GetTotalAnimationCount();
 		int32 Classified = Classifier->GetClassifiedCount();
 		int32 Unclassified = Classifier->GetUnclassifiedAnimations().Num();
@@ -663,6 +694,7 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildRoleRow(ELocomotionRole Role, 
 			.Role(Role)
 			.CandidateItems(CandidateItems)
 			.InitialSelection(CurrentItem)
+			.TargetSkeleton(Skeleton)
 			.OnAnimationSelected_Lambda([this, Role](UAnimSequence* Anim)
 			{
 				OnAnimationSelected(Role, Anim);

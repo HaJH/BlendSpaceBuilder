@@ -105,9 +105,18 @@ void UBlendSpaceBuilderSettings::InitializeDefaultPatterns()
 	PatternEntries.Add({TEXT("sprint.*(forward|_F$)"), true, ELocomotionRole::SprintForward, FVector2D::ZeroVector, 90});
 	PatternEntries.Add({TEXT("sprint.*(front$|$)"), true, ELocomotionRole::SprintForward, FVector2D::ZeroVector, 85});
 
+	// ============== Back Pedal (Priority 88) ==============
+	PatternEntries.Add({TEXT("back.?pedal"), true, ELocomotionRole::WalkBackward, FVector2D::ZeroVector, 88});
+
 	// ============== Strafe Independent (Priority 88) ==============
 	PatternEntries.Add({TEXT("StrafeL"), true, ELocomotionRole::WalkLeft, FVector2D::ZeroVector, 88});
 	PatternEntries.Add({TEXT("StrafeR"), true, ELocomotionRole::WalkRight, FVector2D::ZeroVector, 88});
+	PatternEntries.Add({TEXT("Strafe.*Left"), true, ELocomotionRole::WalkLeft, FVector2D::ZeroVector, 88});
+	PatternEntries.Add({TEXT("Strafe.*Right"), true, ELocomotionRole::WalkRight, FVector2D::ZeroVector, 88});
+
+	// ============== Shuffle (Priority 86) ==============
+	PatternEntries.Add({TEXT("Shuffle.*Left"), true, ELocomotionRole::WalkLeft, FVector2D::ZeroVector, 86});
+	PatternEntries.Add({TEXT("Shuffle.*Right"), true, ELocomotionRole::WalkRight, FVector2D::ZeroVector, 86});
 
 	// ============== No Direction = Forward (Priority 50) ==============
 	PatternEntries.Add({TEXT("_walk$"), true, ELocomotionRole::WalkForward, FVector2D::ZeroVector, 50});
@@ -362,6 +371,9 @@ void UBlendSpaceBuilderSettings::InitializeDefaultIgnorableSuffixes()
 	IgnorableSuffixes.Add(TEXT("_inplace"));
 	IgnorableSuffixes.Add(TEXT("_in_place"));
 	IgnorableSuffixes.Add(TEXT("_IP"));
+	// Loop suffixes
+	IgnorableSuffixes.Add(TEXT("_Loop"));
+	IgnorableSuffixes.Add(TEXT("_loop"));
 	// Other ignorable suffixes
 	IgnorableSuffixes.Add(TEXT("_NEW"));
 }
