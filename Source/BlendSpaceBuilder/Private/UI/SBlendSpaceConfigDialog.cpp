@@ -26,6 +26,7 @@ void SBlendSpaceConfigDialog::Construct(const FArguments& InArgs)
 	Classifier = InArgs._Classifier;
 	BasePath = InArgs._BasePath;
 	ParentWindow = InArgs._ParentWindow;
+	OnAcceptedDelegate = InArgs._OnAccepted;
 
 	UBlendSpaceBuilderSettings* Settings = UBlendSpaceBuilderSettings::Get();
 	XAxisMin = Settings->DefaultMinSpeed;
@@ -574,48 +575,99 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAxisConfigSection()
 
 TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnimationSelectionSection()
 {
-	TSharedRef<SVerticalBox> AnimationList = SNew(SVerticalBox);
-
-	// Define all locomotion roles to show (excluding Custom)
-	static const TArray<ELocomotionRole> AllRoles = {
-		ELocomotionRole::Idle,
-		ELocomotionRole::WalkForward,
-		ELocomotionRole::WalkBackward,
-		ELocomotionRole::WalkLeft,
-		ELocomotionRole::WalkRight,
-		ELocomotionRole::WalkForwardLeft,
-		ELocomotionRole::WalkForwardRight,
-		ELocomotionRole::WalkBackwardLeft,
-		ELocomotionRole::WalkBackwardRight,
-		ELocomotionRole::RunForward,
-		ELocomotionRole::RunBackward,
-		ELocomotionRole::RunLeft,
-		ELocomotionRole::RunRight,
-		ELocomotionRole::RunForwardLeft,
-		ELocomotionRole::RunForwardRight,
-		ELocomotionRole::RunBackwardLeft,
-		ELocomotionRole::RunBackwardRight,
-		ELocomotionRole::SprintForward,
+	// Define role groups
+	struct FRoleGroup
+	{
+		FText GroupName;
+		TArray<ELocomotionRole> Roles;
 	};
 
-	// Show all roles, with or without candidates
-	for (ELocomotionRole Role : AllRoles)
+	static const TArray<FRoleGroup> RoleGroups = {
+		{ LOCTEXT("IdleGroup", "Idle"), { ELocomotionRole::Idle } },
+		{ LOCTEXT("WalkGroup", "Walk"), {
+			ELocomotionRole::WalkForward,
+			ELocomotionRole::WalkBackward,
+			ELocomotionRole::WalkLeft,
+			ELocomotionRole::WalkRight,
+			ELocomotionRole::WalkForwardLeft,
+			ELocomotionRole::WalkForwardRight,
+			ELocomotionRole::WalkBackwardLeft,
+			ELocomotionRole::WalkBackwardRight
+		}},
+		{ LOCTEXT("RunGroup", "Run"), {
+			ELocomotionRole::RunForward,
+			ELocomotionRole::RunBackward,
+			ELocomotionRole::RunLeft,
+			ELocomotionRole::RunRight,
+			ELocomotionRole::RunForwardLeft,
+			ELocomotionRole::RunForwardRight,
+			ELocomotionRole::RunBackwardLeft,
+			ELocomotionRole::RunBackwardRight
+		}},
+		{ LOCTEXT("SprintGroup", "Sprint"), { ELocomotionRole::SprintForward } }
+	};
+
+	TSharedRef<SVerticalBox> GroupContainer = SNew(SVerticalBox);
+
+	for (const FRoleGroup& Group : RoleGroups)
 	{
-		FLocomotionRoleCandidates* Candidates = nullptr;
-		if (Classifier)
+		// Count candidates for this group
+		int32 GroupCandidateCount = 0;
+		for (ELocomotionRole Role : Group.Roles)
 		{
-			auto& Results = Classifier->GetClassifiedResults();
-			if (auto* Found = Results.Find(Role))
+			if (Classifier)
 			{
-				Candidates = const_cast<FLocomotionRoleCandidates*>(Found);
+				auto& Results = Classifier->GetClassifiedResults();
+				if (auto* Found = Results.Find(Role))
+				{
+					GroupCandidateCount += Found->Candidates.Num();
+				}
 			}
 		}
 
-		AnimationList->AddSlot()
+		// Build the role rows for this group
+		TSharedRef<SVerticalBox> RoleList = SNew(SVerticalBox);
+		for (ELocomotionRole Role : Group.Roles)
+		{
+			FLocomotionRoleCandidates* Candidates = nullptr;
+			if (Classifier)
+			{
+				auto& Results = Classifier->GetClassifiedResults();
+				if (auto* Found = Results.Find(Role))
+				{
+					Candidates = const_cast<FLocomotionRoleCandidates*>(Found);
+				}
+			}
+
+			RoleList->AddSlot()
+				.AutoHeight()
+				.Padding(4)
+				[
+					BuildRoleRow(Role, Candidates)
+				];
+		}
+
+		// Group title with candidate count
+		FText GroupTitle = FText::Format(
+			LOCTEXT("GroupTitleFormat", "{0} ({1})"),
+			Group.GroupName,
+			FText::AsNumber(GroupCandidateCount));
+
+		// Add expandable area for this group
+		// Collapse if no candidates found
+		bool bShouldCollapse = (GroupCandidateCount == 0);
+
+		GroupContainer->AddSlot()
 			.AutoHeight()
-			.Padding(4)
+			.Padding(0, 2)
 			[
-				BuildRoleRow(Role, Candidates)
+				SNew(SExpandableArea)
+				.AreaTitle(GroupTitle)
+				.InitiallyCollapsed(bShouldCollapse)
+				.BodyContent()
+				[
+					RoleList
+				]
 			];
 	}
 
@@ -626,7 +678,7 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnimationSelectionSection()
 		int32 Classified = Classifier->GetClassifiedCount();
 		int32 Unclassified = Classifier->GetUnclassifiedAnimations().Num();
 
-		AnimationList->AddSlot()
+		GroupContainer->AddSlot()
 			.AutoHeight()
 			.Padding(4, 8)
 			[
@@ -644,7 +696,7 @@ TSharedRef<SWidget> SBlendSpaceConfigDialog::BuildAnimationSelectionSection()
 		.InitiallyCollapsed(false)
 		.BodyContent()
 		[
-			AnimationList
+			GroupContainer
 		];
 }
 
@@ -983,6 +1035,13 @@ void SBlendSpaceConfigDialog::RecalculateAxisRange()
 FReply SBlendSpaceConfigDialog::OnAcceptClicked()
 {
 	bWasAccepted = true;
+
+	// Execute delegate before closing
+	if (OnAcceptedDelegate.IsBound())
+	{
+		OnAcceptedDelegate.Execute(GetBuildConfig());
+	}
+
 	if (ParentWindow.IsValid())
 	{
 		ParentWindow->RequestDestroyWindow();

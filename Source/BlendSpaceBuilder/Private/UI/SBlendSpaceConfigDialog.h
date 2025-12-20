@@ -11,14 +11,17 @@ class UAnimSequence;
 struct FLocomotionRoleCandidates;
 enum class ELocomotionRole : uint8;
 
+DECLARE_DELEGATE_OneParam(FOnBlendSpaceConfigAccepted, const FBlendSpaceBuildConfig&);
+
 class SBlendSpaceConfigDialog : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SBlendSpaceConfigDialog) {}
 		SLATE_ARGUMENT(USkeleton*, Skeleton)
-		SLATE_ARGUMENT(FLocomotionAnimClassifier*, Classifier)
+		SLATE_ARGUMENT(TSharedPtr<FLocomotionAnimClassifier>, Classifier)
 		SLATE_ARGUMENT(FString, BasePath)
 		SLATE_ARGUMENT(TSharedPtr<SWindow>, ParentWindow)
+		SLATE_EVENT(FOnBlendSpaceConfigAccepted, OnAccepted)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -40,9 +43,10 @@ private:
 	void OnAnimationSelected(ELocomotionRole Role, UAnimSequence* SelectedAnim);
 
 	USkeleton* Skeleton = nullptr;
-	FLocomotionAnimClassifier* Classifier = nullptr;
+	TSharedPtr<FLocomotionAnimClassifier> Classifier;
 	FString BasePath;
 	TSharedPtr<SWindow> ParentWindow;
+	FOnBlendSpaceConfigAccepted OnAcceptedDelegate;
 
 	float XAxisMin = -500.f;
 	float XAxisMax = 500.f;

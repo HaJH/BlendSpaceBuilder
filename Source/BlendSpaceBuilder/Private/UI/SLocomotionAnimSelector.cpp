@@ -226,6 +226,9 @@ void SLocomotionAnimSelector::OnBrowseToAsset()
 
 FReply SLocomotionAnimSelector::OnPickAsset()
 {
+	// Close existing picker if any
+	ClosePickerWindow();
+
 	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
 
 	FAssetPickerConfig AssetPickerConfig;
@@ -244,12 +247,13 @@ FReply SLocomotionAnimSelector::OnPickAsset()
 	// Create asset picker widget
 	TSharedRef<SWidget> AssetPickerWidget = ContentBrowserModule.Get().CreateAssetPicker(AssetPickerConfig);
 
-	// Create modal window
+	// Create non-modal window (allows interaction with other windows)
 	TSharedRef<SWindow> PickerWindow = SNew(SWindow)
 		.Title(LOCTEXT("PickAnimation", "Pick Animation"))
 		.ClientSize(FVector2D(800, 600))
 		.SupportsMaximize(false)
 		.SupportsMinimize(false)
+		.IsTopmostWindow(false)
 		[
 			SNew(SBorder)
 			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
@@ -258,7 +262,11 @@ FReply SLocomotionAnimSelector::OnPickAsset()
 			]
 		];
 
-	GEditor->EditorAddModalWindow(PickerWindow);
+	// Store reference for later closing
+	PickerWindowPtr = PickerWindow;
+
+	// Add as non-modal window
+	FSlateApplication::Get().AddWindow(PickerWindow);
 
 	return FReply::Handled();
 }
@@ -288,13 +296,7 @@ void SLocomotionAnimSelector::OnManualAssetPicked(const FAssetData& AssetData)
 		{
 			ComboBox->SetSelectedItem(Item);
 			OnSelectionChanged(Item, ESelectInfo::Direct);
-
-			// Close picker window
-			TSharedPtr<SWindow> ParentWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
-			if (ParentWindow.IsValid())
-			{
-				FSlateApplication::Get().RequestDestroyWindow(ParentWindow.ToSharedRef());
-			}
+			ClosePickerWindow();
 			return;
 		}
 	}
@@ -305,13 +307,7 @@ void SLocomotionAnimSelector::OnManualAssetPicked(const FAssetData& AssetData)
 	ComboBox->RefreshOptions();
 	ComboBox->SetSelectedItem(NewItem);
 	OnSelectionChanged(NewItem, ESelectInfo::Direct);
-
-	// Close picker window
-	TSharedPtr<SWindow> ParentWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
-	if (ParentWindow.IsValid())
-	{
-		FSlateApplication::Get().RequestDestroyWindow(ParentWindow.ToSharedRef());
-	}
+	ClosePickerWindow();
 }
 
 bool SLocomotionAnimSelector::ValidateSkeletonMatch(UAnimSequence* Anim) const
@@ -332,6 +328,15 @@ TSharedPtr<FClassifiedAnimation> SLocomotionAnimSelector::CreateManualItem(UAnim
 	Item->bHasRootMotion = Anim->bEnableRootMotion;
 	Item->MatchPriority = -1; // Mark as manual selection
 	return Item;
+}
+
+void SLocomotionAnimSelector::ClosePickerWindow()
+{
+	if (TSharedPtr<SWindow> PickerWindow = PickerWindowPtr.Pin())
+	{
+		FSlateApplication::Get().RequestDestroyWindow(PickerWindow.ToSharedRef());
+		PickerWindowPtr.Reset();
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

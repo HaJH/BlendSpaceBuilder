@@ -150,9 +150,9 @@ void FBlendSpaceBuilderModule::ExecuteGenerateLocomotionBlendSpace(TArray<FAsset
 		return;
 	}
 
-	FLocomotionAnimClassifier Classifier;
-	Classifier.FindAnimationsForSkeleton(TargetSkeleton);
-	Classifier.ClassifyAnimations();
+	TSharedPtr<FLocomotionAnimClassifier> Classifier = MakeShared<FLocomotionAnimClassifier>();
+	Classifier->FindAnimationsForSkeleton(TargetSkeleton);
+	Classifier->ClassifyAnimations();
 
 	TSharedRef<SWindow> Window = SNew(SWindow)
 		.Title(LOCTEXT("BlendSpaceConfigTitle", "Configure Locomotion BlendSpace"))
@@ -162,26 +162,25 @@ void FBlendSpaceBuilderModule::ExecuteGenerateLocomotionBlendSpace(TArray<FAsset
 
 	TSharedRef<SBlendSpaceConfigDialog> Dialog = SNew(SBlendSpaceConfigDialog)
 		.Skeleton(TargetSkeleton)
-		.Classifier(&Classifier)
+		.Classifier(Classifier)
 		.BasePath(BasePath)
-		.ParentWindow(Window);
+		.ParentWindow(Window)
+		.OnAccepted_Lambda([](const FBlendSpaceBuildConfig& Config)
+		{
+			UBlendSpace* CreatedBlendSpace = FBlendSpaceFactory::CreateLocomotionBlendSpace(Config);
+
+			if (CreatedBlendSpace)
+			{
+				TArray<UObject*> AssetsToSync;
+				AssetsToSync.Add(CreatedBlendSpace);
+				GEditor->SyncBrowserToObjects(AssetsToSync);
+			}
+		});
 
 	Window->SetContent(Dialog);
 
-	GEditor->EditorAddModalWindow(Window);
-
-	if (Dialog->WasAccepted())
-	{
-		FBlendSpaceBuildConfig Config = Dialog->GetBuildConfig();
-		UBlendSpace* CreatedBlendSpace = FBlendSpaceFactory::CreateLocomotionBlendSpace(Config);
-
-		if (CreatedBlendSpace)
-		{
-			TArray<UObject*> AssetsToSync;
-			AssetsToSync.Add(CreatedBlendSpace);
-			GEditor->SyncBrowserToObjects(AssetsToSync);
-		}
-	}
+	// Add as non-modal window to allow interaction with Content Browser
+	FSlateApplication::Get().AddWindow(Window);
 }
 
 //=============================================================================

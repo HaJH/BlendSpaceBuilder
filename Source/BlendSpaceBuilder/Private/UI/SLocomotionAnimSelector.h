@@ -37,6 +37,9 @@ private:
 	bool ValidateSkeletonMatch(UAnimSequence* Anim) const;
 	TSharedPtr<FClassifiedAnimation> CreateManualItem(UAnimSequence* Anim);
 
+	/** Close the picker window if it's open */
+	void ClosePickerWindow();
+
 	ELocomotionRole Role;
 	TArray<TSharedPtr<FClassifiedAnimation>> CandidateItems;
 	TSharedPtr<FClassifiedAnimation> CurrentSelection;
@@ -44,4 +47,7 @@ private:
 
 	TSharedPtr<SComboBox<TSharedPtr<FClassifiedAnimation>>> ComboBox;
 	USkeleton* TargetSkeleton = nullptr;
+
+	/** Reference to the currently open picker window (if any) */
+	TWeakPtr<SWindow> PickerWindowPtr;
 };
