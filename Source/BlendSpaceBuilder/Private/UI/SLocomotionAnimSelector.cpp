@@ -242,6 +242,30 @@ FReply SLocomotionAnimSelector::OnPickAsset()
 
 	// Filter: AnimSequence only
 	AssetPickerConfig.Filter.ClassPaths.Add(UAnimSequence::StaticClass()->GetClassPathName());
+
+	// Filter by skeleton to show only compatible animations
+	AssetPickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateLambda(
+		[this](const FAssetData& AssetData) -> bool
+		{
+			if (!TargetSkeleton)
+			{
+				return false; // No target skeleton - show all
+			}
+
+			// Get skeleton path from asset metadata
+			FAssetDataTagMapSharedView::FFindTagResult SkeletonTag =
+				AssetData.TagsAndValues.FindTag(GET_MEMBER_NAME_CHECKED(UAnimSequence, Skeleton));
+
+			if (!SkeletonTag.IsSet())
+			{
+				return true; // No skeleton info - filter out
+			}
+
+			// Compare skeleton paths
+			FSoftObjectPath TargetSkeletonPath(TargetSkeleton);
+			return SkeletonTag.GetValue() != TargetSkeletonPath.ToString();
+		});
+
 	AssetPickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &SLocomotionAnimSelector::OnManualAssetPicked);
 
 	// Create asset picker widget
