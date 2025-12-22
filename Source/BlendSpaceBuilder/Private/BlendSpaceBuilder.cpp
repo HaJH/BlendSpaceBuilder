@@ -533,6 +533,41 @@ void FBlendSpaceBuilderModule::ExecuteAdjustAxisRange(TArray<FAssetData> Selecte
 
 		for (UBlendSpace* BlendSpace : BlendSpaces)
 		{
+			BlendSpace->Modify();
+
+			// Get old axis ranges before modification
+			const FBlendParameter& OldXParam = BlendSpace->GetBlendParameter(0);
+			const FBlendParameter& OldYParam = BlendSpace->GetBlendParameter(1);
+			const float OldXMin = OldXParam.Min;
+			const float OldXMax = OldXParam.Max;
+			const float OldYMin = OldYParam.Min;
+			const float OldYMax = OldYParam.Max;
+
+			// Remap sample positions proportionally to the new range
+			FProperty* SampleDataProperty = UBlendSpace::StaticClass()->FindPropertyByName(TEXT("SampleData"));
+			if (SampleDataProperty)
+			{
+				TArray<FBlendSample>* SampleData = SampleDataProperty->ContainerPtrToValuePtr<TArray<FBlendSample>>(BlendSpace);
+				if (SampleData)
+				{
+					const float OldXRange = OldXMax - OldXMin;
+					const float OldYRange = OldYMax - OldYMin;
+					const float NewXRange = NewXMax - NewXMin;
+					const float NewYRange = NewYMax - NewYMin;
+
+					for (FBlendSample& Sample : *SampleData)
+					{
+						// Normalize to 0-1 range based on old axis
+						const float NormX = (OldXRange != 0.f) ? (Sample.SampleValue.X - OldXMin) / OldXRange : 0.f;
+						const float NormY = (OldYRange != 0.f) ? (Sample.SampleValue.Y - OldYMin) / OldYRange : 0.f;
+
+						// Map to new range
+						Sample.SampleValue.X = NewXMin + NormX * NewXRange;
+						Sample.SampleValue.Y = NewYMin + NormY * NewYRange;
+					}
+				}
+			}
+
 			// Access BlendParameters via reflection (protected member)
 			FProperty* BlendParametersProperty = UBlendSpace::StaticClass()->FindPropertyByName(TEXT("BlendParameters"));
 			if (!BlendParametersProperty)
@@ -553,6 +588,9 @@ void FBlendSpaceBuilderModule::ExecuteAdjustAxisRange(TArray<FAssetData> Selecte
 			// Update Y axis
 			BlendParameters[1].Min = NewYMin;
 			BlendParameters[1].Max = NewYMax;
+
+			// Validate sample data after modification
+			BlendSpace->ValidateSampleData();
 
 			// Mark package dirty
 			BlendSpace->MarkPackageDirty();

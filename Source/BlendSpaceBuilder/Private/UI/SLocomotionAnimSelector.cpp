@@ -261,9 +261,11 @@ FReply SLocomotionAnimSelector::OnPickAsset()
 				return true; // No skeleton info - filter out
 			}
 
-			// Compare skeleton paths
+			// Compare using FSoftObjectPath for consistent comparison
+			// (metadata format and FSoftObjectPath::ToString() may differ)
+			FSoftObjectPath AssetSkeletonPath(SkeletonTag.GetValue());
 			FSoftObjectPath TargetSkeletonPath(TargetSkeleton);
-			return SkeletonTag.GetValue() != TargetSkeletonPath.ToString();
+			return AssetSkeletonPath != TargetSkeletonPath;
 		});
 
 	AssetPickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &SLocomotionAnimSelector::OnManualAssetPicked);
