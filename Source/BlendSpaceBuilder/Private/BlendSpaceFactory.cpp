@@ -1,5 +1,6 @@
 #include "BlendSpaceFactory.h"
 #include "BlendSpaceBuilderSettings.h"
+#include "BlendSpaceConfigAssetUserData.h"
 
 #include "Animation/BlendSpace.h"
 #include "Animation/AnimSequence.h"
@@ -364,6 +365,9 @@ UBlendSpace* FBlendSpaceFactory::CreateLocomotionBlendSpace(const FBlendSpaceBui
 		}
 	}
 
+	// Save build configuration as metadata
+	SaveBuildConfigAsMetadata(BlendSpace, Config);
+
 	FinalizeAndSave(BlendSpace);
 
 	if (Config.bOpenInEditor)
@@ -644,6 +648,120 @@ void FBlendSpaceFactory::AddSampleToBlendSpace(UBlendSpace* BlendSpace, UAnimSeq
 
 	BlendSpace->Modify();
 	BlendSpace->AddSample(Animation, Position);
+}
+
+void FBlendSpaceFactory::SaveBuildConfigAsMetadata(UBlendSpace* BlendSpace, const FBlendSpaceBuildConfig& Config)
+{
+	if (!BlendSpace)
+	{
+		return;
+	}
+
+	UBlendSpaceConfigAssetUserData* UserData = BlendSpace->GetAssetUserData<UBlendSpaceConfigAssetUserData>();
+	if (!UserData)
+	{
+		UserData = NewObject<UBlendSpaceConfigAssetUserData>(BlendSpace);
+		BlendSpace->AddAssetUserData(UserData);
+	}
+
+	// Store locomotion type
+	UserData->LocomotionType = Config.LocomotionType;
+
+	// Store X axis configuration
+	UserData->XAxis.AxisName = Config.XAxisName;
+	UserData->XAxis.AnalyzedMin = Config.XAxisMin;
+	UserData->XAxis.AnalyzedMax = Config.XAxisMax;
+	UserData->XAxis.GridNum = Config.GridDivisions;
+
+	// Store Y axis configuration
+	UserData->YAxis.AxisName = Config.YAxisName;
+	UserData->YAxis.AnalyzedMin = Config.YAxisMin;
+	UserData->YAxis.AnalyzedMax = Config.YAxisMax;
+	UserData->YAxis.GridNum = Config.GridDivisions;
+
+	// Store sample positions
+	UserData->Samples.Reset();
+	for (const auto& Pair : Config.PreAnalyzedPositions)
+	{
+		FBlendSpaceSampleMetadata Sample;
+		Sample.AnimSequence = FSoftObjectPath(Pair.Key);
+		Sample.Position = FVector2D(Pair.Value.X, Pair.Value.Y);
+		UserData->Samples.Add(Sample);
+	}
+
+	// Store analysis settings
+	UserData->bApplyAnalysis = Config.bApplyAnalysis;
+	UserData->AnalysisType = Config.AnalysisType;
+	UserData->GridDivisions = Config.GridDivisions;
+	UserData->bSnapToGrid = Config.bSnapToGrid;
+
+	// Store analyzed speeds (calculated from Role-based animations)
+	UserData->WalkSpeed = Config.AnalyzedWalkSpeed;
+	UserData->RunSpeed = Config.AnalyzedRunSpeed;
+	UserData->SprintSpeed = Config.AnalyzedSprintSpeed;
+
+	// If speeds are not pre-calculated, try to extract from PreAnalyzedPositions + SelectedAnimations
+	if (UserData->WalkSpeed <= 0.f || UserData->RunSpeed <= 0.f)
+	{
+		for (const auto& AnimPair : Config.SelectedAnimations)
+		{
+			ELocomotionRole Role = AnimPair.Key;
+			UAnimSequence* Anim = AnimPair.Value;
+			if (!Anim)
+			{
+				continue;
+			}
+
+			const FVector* PosPtr = Config.PreAnalyzedPositions.Find(Anim);
+			if (!PosPtr)
+			{
+				continue;
+			}
+
+			// Get speed magnitude from analyzed position (Y = Forward velocity)
+			float Speed = FMath::Abs(PosPtr->Y);
+			if (Speed <= 0.f)
+			{
+				Speed = PosPtr->Size2D();  // Fallback to 2D magnitude
+			}
+
+			// Categorize by role
+			switch (Role)
+			{
+			case ELocomotionRole::WalkForward:
+			case ELocomotionRole::WalkBackward:
+			case ELocomotionRole::WalkLeft:
+			case ELocomotionRole::WalkRight:
+			case ELocomotionRole::WalkForwardLeft:
+			case ELocomotionRole::WalkForwardRight:
+			case ELocomotionRole::WalkBackwardLeft:
+			case ELocomotionRole::WalkBackwardRight:
+				UserData->WalkSpeed = FMath::Max(UserData->WalkSpeed, Speed);
+				break;
+
+			case ELocomotionRole::RunForward:
+			case ELocomotionRole::RunBackward:
+			case ELocomotionRole::RunLeft:
+			case ELocomotionRole::RunRight:
+			case ELocomotionRole::RunForwardLeft:
+			case ELocomotionRole::RunForwardRight:
+			case ELocomotionRole::RunBackwardLeft:
+			case ELocomotionRole::RunBackwardRight:
+				UserData->RunSpeed = FMath::Max(UserData->RunSpeed, Speed);
+				break;
+
+			case ELocomotionRole::SprintForward:
+				UserData->SprintSpeed = FMath::Max(UserData->SprintSpeed, Speed);
+				break;
+
+			default:
+				break;
+			}
+		}
+	}
+
+	UE_LOG(LogBlendSpaceBuilder, Log, TEXT("Saved build config metadata to BlendSpace: %s (Walk=%.1f, Run=%.1f, Sprint=%.1f)"),
+		*BlendSpace->GetName(), UserData->WalkSpeed, UserData->RunSpeed, UserData->SprintSpeed);
 }
 
 void FBlendSpaceFactory::FinalizeAndSave(UBlendSpace* BlendSpace)

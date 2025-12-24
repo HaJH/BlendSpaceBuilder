@@ -851,14 +851,61 @@ FReply SBlendSpaceConfigDialog::OnAnalyzeClicked()
 		}
 	}
 
-	// Calculate max speed from analyzed positions (for Reset to Role Defaults)
+	// Calculate max speed and role-based speeds from analyzed positions
 	AnalyzedMaxSpeed = 0.f;
-	for (const auto& Pair : AnalyzedPositions)
+	AnalyzedWalkSpeed = 0.f;
+	AnalyzedRunSpeed = 0.f;
+	AnalyzedSprintSpeed = 0.f;
+
+	for (const auto& AnimPair : SelectedAnimations)
 	{
-		float Speed = Pair.Value.Size2D();
-		if (Speed > AnalyzedMaxSpeed)
+		ELocomotionRole Role = AnimPair.Key;
+		UAnimSequence* Anim = AnimPair.Value;
+		if (!Anim)
 		{
-			AnalyzedMaxSpeed = Speed;
+			continue;
+		}
+
+		const FVector* PosPtr = AnalyzedPositions.Find(Anim);
+		if (!PosPtr)
+		{
+			continue;
+		}
+
+		float Speed = PosPtr->Size2D();
+		AnalyzedMaxSpeed = FMath::Max(AnalyzedMaxSpeed, Speed);
+
+		// Categorize speed by role
+		switch (Role)
+		{
+		case ELocomotionRole::WalkForward:
+		case ELocomotionRole::WalkBackward:
+		case ELocomotionRole::WalkLeft:
+		case ELocomotionRole::WalkRight:
+		case ELocomotionRole::WalkForwardLeft:
+		case ELocomotionRole::WalkForwardRight:
+		case ELocomotionRole::WalkBackwardLeft:
+		case ELocomotionRole::WalkBackwardRight:
+			AnalyzedWalkSpeed = FMath::Max(AnalyzedWalkSpeed, Speed);
+			break;
+
+		case ELocomotionRole::RunForward:
+		case ELocomotionRole::RunBackward:
+		case ELocomotionRole::RunLeft:
+		case ELocomotionRole::RunRight:
+		case ELocomotionRole::RunForwardLeft:
+		case ELocomotionRole::RunForwardRight:
+		case ELocomotionRole::RunBackwardLeft:
+		case ELocomotionRole::RunBackwardRight:
+			AnalyzedRunSpeed = FMath::Max(AnalyzedRunSpeed, Speed);
+			break;
+
+		case ELocomotionRole::SprintForward:
+			AnalyzedSprintSpeed = FMath::Max(AnalyzedSprintSpeed, Speed);
+			break;
+
+		default:
+			break;
 		}
 	}
 
@@ -1107,6 +1154,20 @@ FBlendSpaceBuildConfig SBlendSpaceConfigDialog::GetBuildConfig() const
 	if (Config.bApplyAnalysis)
 	{
 		Config.PreAnalyzedPositions = AnalyzedPositions;
+	}
+
+	// Always pass analyzed speeds for metadata storage (both SpeedBased and GaitBased)
+	if (bAnalysisPerformed)
+	{
+		Config.AnalyzedWalkSpeed = AnalyzedWalkSpeed;
+		Config.AnalyzedRunSpeed = AnalyzedRunSpeed;
+		Config.AnalyzedSprintSpeed = AnalyzedSprintSpeed;
+
+		// For GaitBased, also pass SelectedAnimations and AnalyzedPositions for metadata
+		if (SelectedLocomotionType == EBlendSpaceLocomotionType::GaitBased)
+		{
+			Config.PreAnalyzedPositions = AnalyzedPositions;
+		}
 	}
 
 	return Config;

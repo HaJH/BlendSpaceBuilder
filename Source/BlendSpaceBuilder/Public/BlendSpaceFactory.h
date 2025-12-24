@@ -2,12 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "BlendSpaceBuilderSettings.h"
+#include "BlendSpaceFactory.generated.h"
 
 class UBlendSpace;
 class UAnimSequence;
 class USkeleton;
 
 /** Analysis type for BlendSpace axis calculation */
+UENUM()
 enum class EBlendSpaceAnalysisType : uint8
 {
 	/** Root Motion based velocity analysis */
@@ -19,6 +21,7 @@ enum class EBlendSpaceAnalysisType : uint8
 };
 
 /** Locomotion type for BlendSpace generation */
+UENUM()
 enum class EBlendSpaceLocomotionType : uint8
 {
 	/** Speed based: X=RightVelocity, Y=ForwardVelocity */
@@ -70,6 +73,18 @@ struct FBlendSpaceBuildConfig
 
 	/** Snap samples to grid */
 	bool bSnapToGrid = true;
+
+	// ============== Analyzed Speed by Role ==============
+	// These store the original analyzed speeds before GaitBased conversion
+
+	/** Analyzed walk speed (max of WalkForward, WalkLeft, etc.) */
+	float AnalyzedWalkSpeed = 0.f;
+
+	/** Analyzed run speed (max of RunForward, RunLeft, etc.) */
+	float AnalyzedRunSpeed = 0.f;
+
+	/** Analyzed sprint speed (SprintForward) */
+	float AnalyzedSprintSpeed = 0.f;
 };
 
 class BLENDSPACEBUILDER_API FBlendSpaceFactory
@@ -114,6 +129,12 @@ public:
 		EBlendSpaceAnalysisType AnalysisType,
 		FName LeftFootBone = NAME_None,
 		FName RightFootBone = NAME_None);
+
+	/**
+	 * Save build configuration as metadata to BlendSpace asset.
+	 * Stores axis configuration, sample positions, and analysis settings.
+	 */
+	static void SaveBuildConfigAsMetadata(UBlendSpace* BlendSpace, const FBlendSpaceBuildConfig& Config);
 
 private:
 	static UBlendSpace* CreateBlendSpaceAsset(const FString& PackagePath, const FString& AssetName, USkeleton* Skeleton);

@@ -80,6 +80,11 @@ private:
 	// Max speed from analysis (used for Reset to Role Defaults)
 	float AnalyzedMaxSpeed = 0.f;
 
+	// Analyzed speeds by role (for metadata storage)
+	float AnalyzedWalkSpeed = 0.f;
+	float AnalyzedRunSpeed = 0.f;
+	float AnalyzedSprintSpeed = 0.f;
+
 	// Calculated axis range from analysis
 	float AnalyzedXMin = -500.f;
 	float AnalyzedXMax = 500.f;
