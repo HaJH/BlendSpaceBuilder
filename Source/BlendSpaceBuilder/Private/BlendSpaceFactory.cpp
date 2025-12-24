@@ -433,35 +433,40 @@ TMap<UAnimSequence*, FVector> FBlendSpaceFactory::AnalyzeSamplePositions(
 			continue;
 		}
 
-		FVector Position;
+		// Get analyzed velocity based on analysis type
+		FVector AnalyzedVelocity;
 		switch (AnalysisType)
 		{
 		case EBlendSpaceAnalysisType::RootMotion:
-			Position = BlendSpaceAnalysisInternal::CalculateRootMotionVelocity(Anim);
+			AnalyzedVelocity = BlendSpaceAnalysisInternal::CalculateRootMotionVelocity(Anim);
 			break;
 		case EBlendSpaceAnalysisType::LocomotionSimple:
-			Position = BlendSpaceAnalysisInternal::CalculateLocomotionVelocitySimple(Anim, LeftFootBone, RightFootBone);
+			AnalyzedVelocity = BlendSpaceAnalysisInternal::CalculateLocomotionVelocitySimple(Anim, LeftFootBone, RightFootBone);
 			break;
 		case EBlendSpaceAnalysisType::LocomotionStride:
-			{
-				// Get magnitude from stride analysis
-				FVector StrideVel = BlendSpaceAnalysisInternal::CalculateLocomotionVelocityStride(Anim, LeftFootBone, RightFootBone);
-				float Magnitude = StrideVel.Size2D() * StrideMultiplier;  // Apply multiplier
-
-				// Apply direction based on role
-				FVector2D DirSign = GetRoleDirectionSign(Role);
-				if (DirSign.IsNearlyZero())
-				{
-					Position = FVector::ZeroVector;  // Idle
-				}
-				else
-				{
-					// Normalize direction and apply magnitude
-					FVector2D Dir = DirSign.GetSafeNormal();
-					Position = FVector(Dir.X * Magnitude, Dir.Y * Magnitude, 0.f);
-				}
-			}
+			AnalyzedVelocity = BlendSpaceAnalysisInternal::CalculateLocomotionVelocityStride(Anim, LeftFootBone, RightFootBone);
+			AnalyzedVelocity *= StrideMultiplier;  // Apply multiplier for stride
 			break;
+		}
+
+		// Apply Role-based direction with analyzed magnitude
+		// This ensures samples don't overlap (e.g., Run_Left, Run_Forward, Run_Right all at different positions)
+		FVector2D DirSign = GetRoleDirectionSign(Role);
+		FVector Position;
+
+		if (DirSign.IsNearlyZero())
+		{
+			// Idle: use zero position
+			Position = FVector::ZeroVector;
+		}
+		else
+		{
+			// Get speed magnitude from analyzed velocity (use 2D magnitude)
+			float Magnitude = AnalyzedVelocity.Size2D();
+
+			// Normalize direction and apply magnitude
+			FVector2D Dir = DirSign.GetSafeNormal();
+			Position = FVector(Dir.X * Magnitude, Dir.Y * Magnitude, 0.f);
 		}
 
 		Result.Add(Anim, Position);
