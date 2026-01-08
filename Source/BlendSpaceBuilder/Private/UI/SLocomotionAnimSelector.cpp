@@ -254,7 +254,7 @@ FReply SLocomotionAnimSelector::OnPickAsset()
 
 			// Get skeleton path from asset metadata
 			FAssetDataTagMapSharedView::FFindTagResult SkeletonTag =
-				AssetData.TagsAndValues.FindTag(GET_MEMBER_NAME_CHECKED(UAnimSequence, Skeleton));
+				AssetData.TagsAndValues.FindTag(TEXT("Skeleton"));
 
 			if (!SkeletonTag.IsSet())
 			{
