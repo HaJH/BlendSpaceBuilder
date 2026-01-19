@@ -44,6 +44,25 @@ struct FBlendSpaceSampleMetadata
 };
 
 /**
+ * Original Speed data for converted BlendSpace samples.
+ * Stores the pre-conversion Speed position and inferred role for each animation.
+ */
+USTRUCT()
+struct FBlendSpaceOriginalSpeedData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category = "ConversionData")
+	FSoftObjectPath AnimSequence;
+
+	UPROPERTY(VisibleAnywhere, Category = "ConversionData")
+	FVector2D OriginalSpeedPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, Category = "ConversionData")
+	ELocomotionRole InferredRole = ELocomotionRole::Idle;
+};
+
+/**
  * Asset User Data for storing BlendSpace build configuration.
  * Attached to BlendSpace assets to preserve the original analysis/build settings.
  */
@@ -99,4 +118,23 @@ public:
 	/** Analyzed sprint animation speed (from SprintForward or similar) */
 	UPROPERTY(VisibleAnywhere, Category = "AnalyzedSpeeds")
 	float SprintSpeed = 0.f;
+
+	// ============== Conversion Data ==============
+	// Data preserved when converting from Speed-based to Gait-based
+
+	/** Whether this BlendSpace was converted from Speed-based format */
+	UPROPERTY(VisibleAnywhere, Category = "ConversionData")
+	bool bConvertedFromSpeedBased = false;
+
+	/** Original Speed positions for each sample before conversion */
+	UPROPERTY(VisibleAnywhere, Category = "ConversionData")
+	TArray<FBlendSpaceOriginalSpeedData> OriginalSpeedData;
+
+	/** Original X axis configuration before conversion */
+	UPROPERTY(VisibleAnywhere, Category = "ConversionData")
+	FBlendSpaceAxisMetadata OriginalXAxis;
+
+	/** Original Y axis configuration before conversion */
+	UPROPERTY(VisibleAnywhere, Category = "ConversionData")
+	FBlendSpaceAxisMetadata OriginalYAxis;
 };

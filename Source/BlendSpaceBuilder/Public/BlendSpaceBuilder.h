@@ -24,6 +24,7 @@ private:
 	void ExecuteApplyModifierToAllSamples(TArray<FAssetData> SelectedAssets);
 	void ExecuteOpenAllSamplesInEditor(TArray<FAssetData> SelectedAssets);
 	void ExecuteAdjustAxisRange(TArray<FAssetData> SelectedAssets);
+	void ExecuteConvertToGaitBased(TArray<FAssetData> SelectedAssets);
 
 	// Helper functions
 	TArray<UAnimSequence*> GetAnimationsFromBlendSpace(UBlendSpace* BlendSpace);

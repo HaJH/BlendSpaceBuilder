@@ -30,8 +30,10 @@
 #include "BlendSpaceBuilderSettings.h"
 #include "LocomotionAnimClassifier.h"
 #include "BlendSpaceFactory.h"
+#include "BlendSpaceGaitConverter.h"
 #include "UI/SBlendSpaceConfigDialog.h"
 #include "UI/SAxisRangeDialog.h"
+#include "UI/SBlendSpaceGaitConversionDialog.h"
 
 #define LOCTEXT_NAMESPACE "FBlendSpaceBuilderModule"
 
@@ -189,6 +191,33 @@ void FBlendSpaceBuilderModule::ExecuteGenerateLocomotionBlendSpace(TArray<FAsset
 
 void FBlendSpaceBuilderModule::CreateBlendSpaceUtilityMenu(FMenuBuilder& MenuBuilder, TArray<FAssetData> SelectedAssets)
 {
+	// Check if selected BlendSpaces are Speed-based (can be converted)
+	bool bHasSpeedBasedBlendSpace = false;
+	for (const FAssetData& Asset : SelectedAssets)
+	{
+		if (Asset.AssetClassPath == UBlendSpace::StaticClass()->GetClassPathName())
+		{
+			if (UBlendSpace* BlendSpace = Cast<UBlendSpace>(Asset.GetAsset()))
+			{
+				if (FBlendSpaceGaitConverter::IsSpeedBasedBlendSpace(BlendSpace))
+				{
+					bHasSpeedBasedBlendSpace = true;
+					break;
+				}
+			}
+		}
+	}
+
+	MenuBuilder.AddMenuEntry(
+		LOCTEXT("ConvertToGaitBased", "Convert to Gait-Based..."),
+		LOCTEXT("ConvertToGaitBasedTooltip", "Convert Speed-based BlendSpace to Gait-based format (X=Direction, Y=GaitIndex)"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "ClassIcon.BlendSpace"),
+		FUIAction(
+			FExecuteAction::CreateRaw(this, &FBlendSpaceBuilderModule::ExecuteConvertToGaitBased, SelectedAssets),
+			FCanExecuteAction::CreateLambda([bHasSpeedBasedBlendSpace]() { return bHasSpeedBasedBlendSpace; })
+		)
+	);
+
 	MenuBuilder.AddMenuEntry(
 		LOCTEXT("AdjustAxisRange", "Adjust Axis Range..."),
 		LOCTEXT("AdjustAxisRangeTooltip", "Adjust X/Y axis min/max range for selected BlendSpaces"),
@@ -604,6 +633,54 @@ void FBlendSpaceBuilderModule::ExecuteAdjustAxisRange(TArray<FAssetData> Selecte
 		Notification.ExpireDuration = 3.0f;
 		FSlateNotificationManager::Get().AddNotification(Notification);
 	}
+}
+
+//=============================================================================
+// Convert to Gait-Based
+//=============================================================================
+
+void FBlendSpaceBuilderModule::ExecuteConvertToGaitBased(TArray<FAssetData> SelectedAssets)
+{
+	// Find first valid Speed-based BlendSpace
+	UBlendSpace* TargetBlendSpace = nullptr;
+	for (const FAssetData& Asset : SelectedAssets)
+	{
+		if (Asset.AssetClassPath == UBlendSpace::StaticClass()->GetClassPathName())
+		{
+			if (UBlendSpace* BlendSpace = Cast<UBlendSpace>(Asset.GetAsset()))
+			{
+				if (FBlendSpaceGaitConverter::IsSpeedBasedBlendSpace(BlendSpace))
+				{
+					TargetBlendSpace = BlendSpace;
+					break;
+				}
+			}
+		}
+	}
+
+	if (!TargetBlendSpace)
+	{
+		FNotificationInfo Info(LOCTEXT("NoSpeedBasedBlendSpace", "No Speed-based BlendSpace found to convert"));
+		Info.ExpireDuration = 3.0f;
+		FSlateNotificationManager::Get().AddNotification(Info);
+		return;
+	}
+
+	// Create and show dialog
+	TSharedRef<SWindow> Window = SNew(SWindow)
+		.Title(LOCTEXT("ConvertToGaitBasedTitle", "Convert to Gait-Based BlendSpace"))
+		.ClientSize(FVector2D(500, 500))
+		.SupportsMinimize(false)
+		.SupportsMaximize(false);
+
+	TSharedRef<SBlendSpaceGaitConversionDialog> Dialog = SNew(SBlendSpaceGaitConversionDialog)
+		.BlendSpace(TargetBlendSpace)
+		.ParentWindow(Window);
+
+	Window->SetContent(Dialog);
+
+	// Add as non-modal window
+	FSlateApplication::Get().AddWindow(Window);
 }
 
 #undef LOCTEXT_NAMESPACE
