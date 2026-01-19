@@ -21,7 +21,7 @@ void SBlendSpaceGaitConversionDialog::Construct(const FArguments& InArgs)
 
 	// Default config - in-place conversion by default
 	Config.bCreateCopy = false;
-	Config.bOpenInEditor = true;
+	Config.bOpenInEditor = false;
 	Config.OutputSuffix = TEXT("_Gait");
 
 	ChildSlot

@@ -19,13 +19,13 @@ struct FGaitConversionConfig
 	float WalkToRunSpeedRatio = 0.6f;
 
 	/** Whether to create a copy instead of modifying original */
-	bool bCreateCopy = true;
+	bool bCreateCopy = false;
 
 	/** Suffix to append when creating a copy */
 	FString OutputSuffix = TEXT("_Gait");
 
 	/** Whether to open the result in editor */
-	bool bOpenInEditor = true;
+	bool bOpenInEditor = false;
 };
 
 /**

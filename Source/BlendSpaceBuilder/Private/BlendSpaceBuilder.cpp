@@ -641,8 +641,8 @@ void FBlendSpaceBuilderModule::ExecuteAdjustAxisRange(TArray<FAssetData> Selecte
 
 void FBlendSpaceBuilderModule::ExecuteConvertToGaitBased(TArray<FAssetData> SelectedAssets)
 {
-	// Find first valid Speed-based BlendSpace
-	UBlendSpace* TargetBlendSpace = nullptr;
+	// Collect all Speed-based BlendSpaces
+	TArray<UBlendSpace*> SpeedBasedBlendSpaces;
 	for (const FAssetData& Asset : SelectedAssets)
 	{
 		if (Asset.AssetClassPath == UBlendSpace::StaticClass()->GetClassPathName())
@@ -651,14 +651,13 @@ void FBlendSpaceBuilderModule::ExecuteConvertToGaitBased(TArray<FAssetData> Sele
 			{
 				if (FBlendSpaceGaitConverter::IsSpeedBasedBlendSpace(BlendSpace))
 				{
-					TargetBlendSpace = BlendSpace;
-					break;
+					SpeedBasedBlendSpaces.Add(BlendSpace);
 				}
 			}
 		}
 	}
 
-	if (!TargetBlendSpace)
+	if (SpeedBasedBlendSpaces.IsEmpty())
 	{
 		FNotificationInfo Info(LOCTEXT("NoSpeedBasedBlendSpace", "No Speed-based BlendSpace found to convert"));
 		Info.ExpireDuration = 3.0f;
@@ -666,21 +665,64 @@ void FBlendSpaceBuilderModule::ExecuteConvertToGaitBased(TArray<FAssetData> Sele
 		return;
 	}
 
-	// Create and show dialog
-	TSharedRef<SWindow> Window = SNew(SWindow)
-		.Title(LOCTEXT("ConvertToGaitBasedTitle", "Convert to Gait-Based BlendSpace"))
-		.ClientSize(FVector2D(500, 500))
-		.SupportsMinimize(false)
-		.SupportsMaximize(false);
+	if (SpeedBasedBlendSpaces.Num() == 1)
+	{
+		// Single selection: show dialog
+		UBlendSpace* TargetBlendSpace = SpeedBasedBlendSpaces[0];
 
-	TSharedRef<SBlendSpaceGaitConversionDialog> Dialog = SNew(SBlendSpaceGaitConversionDialog)
-		.BlendSpace(TargetBlendSpace)
-		.ParentWindow(Window);
+		TSharedRef<SWindow> Window = SNew(SWindow)
+			.Title(LOCTEXT("ConvertToGaitBasedTitle", "Convert to Gait-Based BlendSpace"))
+			.ClientSize(FVector2D(500, 500))
+			.SupportsMinimize(false)
+			.SupportsMaximize(false);
 
-	Window->SetContent(Dialog);
+		TSharedRef<SBlendSpaceGaitConversionDialog> Dialog = SNew(SBlendSpaceGaitConversionDialog)
+			.BlendSpace(TargetBlendSpace)
+			.ParentWindow(Window);
 
-	// Add as non-modal window
-	FSlateApplication::Get().AddWindow(Window);
+		Window->SetContent(Dialog);
+
+		// Add as non-modal window
+		FSlateApplication::Get().AddWindow(Window);
+	}
+	else
+	{
+		// Multiple selection: batch convert with default settings
+		FGaitConversionConfig Config;
+		Config.bCreateCopy = false;
+		Config.bOpenInEditor = false;
+
+		int32 SuccessCount = 0;
+		int32 FailCount = 0;
+
+		for (UBlendSpace* BlendSpace : SpeedBasedBlendSpaces)
+		{
+			FGaitConversionResult ConversionResult;
+			UBlendSpace* ConvertedBlendSpace = FBlendSpaceGaitConverter::ConvertToGaitBased(BlendSpace, Config, ConversionResult);
+
+			if (ConvertedBlendSpace)
+			{
+				SuccessCount++;
+			}
+			else
+			{
+				FailCount++;
+			}
+		}
+
+		// Show notification
+		FNotificationInfo Info(FText::Format(
+			LOCTEXT("BatchConvertResult", "Converted {0} BlendSpace(s) to Gait-based ({1} failed)"),
+			FText::AsNumber(SuccessCount),
+			FText::AsNumber(FailCount)));
+		Info.ExpireDuration = 5.0f;
+		Info.bUseSuccessFailIcons = true;
+		TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+		if (Notification.IsValid())
+		{
+			Notification->SetCompletionState(FailCount == 0 ? SNotificationItem::CS_Success : SNotificationItem::CS_Fail);
+		}
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

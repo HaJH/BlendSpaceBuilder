@@ -181,10 +181,7 @@ UBlendSpace* FBlendSpaceGaitConverter::ConvertToGaitBased(
 	// Re-analyze target to get correct animation references after copy
 	FGaitConversionResult TargetAnalysis = AnalyzeBlendSpace(TargetBS, Config);
 
-	// Configure Gait axes
-	ConfigureGaitAxes(TargetBS);
-
-	// Update sample positions
+	// Update sample positions first (before changing axes)
 	FProperty* SampleDataProperty = UBlendSpace::StaticClass()->FindPropertyByName(TEXT("SampleData"));
 	if (SampleDataProperty)
 	{
@@ -209,18 +206,21 @@ UBlendSpace* FBlendSpaceGaitConverter::ConvertToGaitBased(
 		}
 	}
 
+	// Configure Gait axes after sample positions are updated
+	ConfigureGaitAxes(TargetBS);
+
 	// Save conversion metadata
 	SaveConversionMetadata(TargetBS, TargetAnalysis,
 		OutResult.OriginalXMin, OutResult.OriginalXMax,
 		OutResult.OriginalYMin, OutResult.OriginalYMax);
 
-	// Validate changes
+	// Validate and resample - ResampleData recalculates internal grid/triangle data
 	TargetBS->ValidateSampleData();
+	TargetBS->ResampleData();
 	TargetBS->PostEditChange();
 	TargetBS->MarkPackageDirty();
 
-	// Only save package for new copies (not in-place conversion)
-	if (Config.bCreateCopy)
+	// Always save package to ensure grid data is serialized correctly
 	{
 		UPackage* Package = TargetBS->GetOutermost();
 		FString PackageFilename;
