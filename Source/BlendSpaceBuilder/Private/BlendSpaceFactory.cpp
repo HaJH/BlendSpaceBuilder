@@ -3,6 +3,7 @@
 #include "BlendSpaceConfigAssetUserData.h"
 
 #include "Animation/BlendSpace.h"
+#include "Animation/AnimationAsset.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimTypes.h"
 #include "Animation/Skeleton.h"
@@ -103,9 +104,7 @@ namespace BlendSpaceAnalysisInternal
 		}
 
 		// Extract root motion from start to end of animation
-		PRAGMA_DISABLE_DEPRECATION_WARNINGS
-		FTransform RootMotion = Animation->ExtractRootMotionFromRange(0.0f, static_cast<float>(PlayLength));
-		PRAGMA_ENABLE_DEPRECATION_WARNINGS
+		FTransform RootMotion = Animation->ExtractRootMotionFromRange(0.0, PlayLength, FAnimExtractContext());
 		FVector Translation = RootMotion.GetTranslation();
 		FVector Velocity = Translation / PlayLength;
 
